@@ -1,0 +1,20 @@
+# 密钥与本地配置
+.env
+config.json
+
+# 数据库
+*.db
+*.db-wal
+*.db-shm
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# 日志
+.claude/logs/
+*.log
+
+# 系统
+.DS_Store
