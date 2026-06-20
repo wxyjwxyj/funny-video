@@ -1,0 +1,86 @@
+"""AI 打标签流水线：给 funny_score=NULL 的视频调 Claude 评分并回写。
+
+使用 claude_call_tool（tool_use 协议），不用 "Output JSON only" 文本解析。
+prompt 全英文（避免代理拦截），输出 tags 允许中文。
+"""
+import json
+
+from storage import repository
+from utils.claude import claude_call_tool
+from utils.log import get_logger
+
+logger = get_logger(__name__)
+
+_TOOL_NAME = "tag_video"
+_TOOL_DESC = (
+    "Analyze a short video's metadata and return content tags "
+    "plus a humor score indicating how funny/entertaining it likely is."
+)
+_INPUT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "tags": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "3-5 content tags in Chinese, e.g. ['搞笑', '鬼畜', '日常']",
+        },
+        "funny_score": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10,
+            "description": (
+                "Humor score 0-10. "
+                "0=not funny at all, 5=moderately funny, 10=extremely hilarious. "
+                "Base on title, category, and play/like ratio."
+            ),
+        },
+        "reason": {
+            "type": "string",
+            "description": "One sentence explaining the score (Chinese ok).",
+        },
+    },
+    "required": ["tags", "funny_score", "reason"],
+}
+
+
+def _build_prompt(video: dict) -> str:
+    like = video.get("like_count") or 0
+    play = video.get("play_count") or 1
+    return (
+        f"Video title: {video['title']}\n"
+        f"Category: {video.get('category', 'unknown')}\n"
+        f"Author: {video.get('author', 'unknown')}\n"
+        f"Duration: {video.get('duration', 0)}s\n"
+        f"Play count: {play:,}  Like count: {like:,}  "
+        f"Like ratio: {like/play:.2%}\n\n"
+        "Rate how funny/entertaining this video likely is based on the metadata above. "
+        "Focus on whether it belongs to humor, parody, meme, or entertainment genres."
+    )
+
+
+def run(batch_size: int = 20) -> int:
+    """给一批未打标签的视频评分，返回处理条数。"""
+    videos = repository.list_untagged(limit=batch_size)
+    if not videos:
+        logger.info("tagging: 无待处理视频")
+        return 0
+
+    success = 0
+    for v in videos:
+        try:
+            result = claude_call_tool(
+                _build_prompt(v),
+                tool_name=_TOOL_NAME,
+                tool_description=_TOOL_DESC,
+                input_schema=_INPUT_SCHEMA,
+            )
+            tags: list[str] = result.get("tags", [])
+            score: int = result.get("funny_score", 0)
+            repository.update_tags(v["content_hash"], tags, score)
+            logger.info("tagging: %s → score=%d tags=%s", v["title"][:30], score, tags)
+            success += 1
+        except Exception as e:
+            logger.warning("tagging: %s 失败: %s", v.get("content_hash"), e)
+
+    logger.info("tagging: 完成 %d/%d 条", success, len(videos))
+    return success
