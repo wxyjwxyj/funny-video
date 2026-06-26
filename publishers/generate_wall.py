@@ -2,9 +2,11 @@
 
 从 DB 读取有 funny_score 的视频，渲染成可直接用浏览器打开的单文件 HTML。
 模板在 publishers/templates/wall.html，Python 只做数据填充，不内联 CSS/JS。
+每次生成同时存档到 archive/YYYY-MM-DD.html，并更新 archive/index.html。
 """
 import contextlib
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -16,6 +18,57 @@ logger = get_logger(__name__)
 _TEMPLATE = Path(__file__).parent / "templates" / "wall.html"
 _DB_PATH = Path(__file__).parent.parent / "video.db"
 _OUTPUT = Path(__file__).parent.parent / "wall.html"
+_ARCHIVE_DIR = Path(__file__).parent.parent / "archive"
+
+
+def _update_archive_index() -> None:
+    """重新生成 archive/index.html，列出所有历史日期。"""
+    files = sorted(_ARCHIVE_DIR.glob("????-??-??.html"), reverse=True)
+    rows = ""
+    for f in files:
+        date = f.stem
+        m = re.search(r"(\d+) 条", f.read_text(encoding="utf-8"))
+        count = m.group(1) if m else "?"
+        rows += f"<tr><td><a href='{f.name}'>{date}</a></td><td>{count} 条</td></tr>\n"
+
+    html = f"""<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>搞笑视频归档</title>
+<style>
+*,*::before,*::after{{box-sizing:border-box;margin:0;padding:0}}
+body{{background:#0f0f0f;color:#e0e0e0;font-family:system-ui,sans-serif}}
+.container{{max-width:480px;margin:40px auto;background:#1a1a1a;border-radius:12px;overflow:hidden}}
+.header{{background:#1e1e1e;padding:24px;border-bottom:1px solid #2a2a2a}}
+.header h1{{font-size:18px;font-weight:600}}
+.header p{{font-size:13px;color:#888;margin-top:4px}}
+table{{width:100%;border-collapse:collapse}}
+th{{padding:10px 24px;text-align:left;font-size:11px;color:#666;font-weight:600;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #2a2a2a}}
+td{{padding:14px 24px;border-bottom:1px solid #1e1e1e;font-size:14px;color:#aaa}}
+td a{{color:#fb7299;text-decoration:none;font-weight:600}}
+td a:hover{{text-decoration:underline}}
+tr:hover td{{background:#1e1e1e}}
+.back{{display:block;padding:12px 24px;font-size:13px;color:#666;text-decoration:none}}
+.back:hover{{color:#fb7299}}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1>📼 搞笑视频归档</h1>
+    <p>共 {len(files)} 天 · 点击日期查看当天内容</p>
+  </div>
+  <a href="../wall.html" class="back">← 返回今日</a>
+  <table>
+    <thead><tr><th>日期</th><th>视频数</th></tr></thead>
+    <tbody>{rows}</tbody>
+  </table>
+</div>
+</body>
+</html>"""
+    (_ARCHIVE_DIR / "index.html").write_text(html, encoding="utf-8")
 
 
 def _format_num(n: int | None) -> str:
@@ -97,4 +150,13 @@ def generate(min_score: int = 0, output: Path | None = None) -> Path:
 
     out.write_text(html, encoding="utf-8")
     logger.info("generate_wall: 已写入 %s（%d 条）", out, len(videos))
+
+    # 每次生成同步存档到 archive/YYYY-MM-DD.html
+    _ARCHIVE_DIR.mkdir(exist_ok=True)
+    date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    archive_file = _ARCHIVE_DIR / f"{date_str}.html"
+    archive_file.write_text(html, encoding="utf-8")
+    _update_archive_index()
+    logger.info("generate_wall: 已存档 %s", archive_file)
+
     return out
