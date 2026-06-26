@@ -76,10 +76,17 @@ document.getElementById('closeBtn').onclick = () => {
   player.src = '';
 };
 overlay.onclick = (e) => { if (e.target === overlay) { overlay.classList.add('hidden'); player.src = ''; } };
+// 卡片点击：有 embed → iframe 内嵌；无 embed → 新标签页外跳
 document.querySelectorAll('.card').forEach(card => {
   card.onclick = () => {
-    player.src = card.dataset.embed;
-    overlay.classList.remove('hidden');
+    const embed = card.dataset.embed;
+    if (embed) {
+      player.src = embed;
+      overlay.classList.remove('hidden');
+    } else {
+      const href = card.dataset.href;
+      if (href) window.open(href, '_blank');
+    }
   };
 });
 // 过滤

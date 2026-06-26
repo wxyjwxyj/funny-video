@@ -1,7 +1,7 @@
-"""主入口：B站全链路（采集 → 去重 → 打标签 → 生成视频墙）。
+"""主入口：多平台全链路（采集 → 去重 → 打标签 → 生成视频墙）。
 
 用法：
-    python run.py [--pages N] [--tag-batch N] [--min-score N] [--skip-collect] [--skip-tag]
+    python run.py [--pages N] [--tag-batch N] [--min-score N] [--skip-collect] [--skip-tag] [--skip-douyin]
 """
 import argparse
 
@@ -23,13 +23,25 @@ def main() -> None:
     p.add_argument("--min-score", type=int, default=0, help="视频墙最低分（默认0=全部）")
     p.add_argument("--skip-collect", action="store_true", help="跳过采集，只打标签+生成")
     p.add_argument("--skip-tag", action="store_true", help="跳过打标签，只采集+生成")
+    p.add_argument("--skip-douyin", action="store_true", help="跳过抖音采集（CDP 不可用时）")
     args = p.parse_args()
 
     init_db(_DB)
 
     if not args.skip_collect:
-        videos = fetch_popular(pages=args.pages)
-        dedup.run(videos)
+        # B站（公开 API，始终可用）
+        bilibili_videos = fetch_popular(pages=args.pages)
+        dedup.run(bilibili_videos)
+
+        # 抖音（CDP，可选）
+        if not args.skip_douyin:
+            try:
+                from collectors.douyin import fetch_popular as fetch_douyin
+                douyin_videos = fetch_douyin()
+                if douyin_videos:
+                    dedup.run(douyin_videos)
+            except Exception as e:
+                logger.warning("抖音采集失败（降级跳过）: %s", e)
 
     if not args.skip_tag:
         tagging.run(batch_size=args.tag_batch)

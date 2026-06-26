@@ -84,10 +84,21 @@ def _render_card(v: dict) -> str:
     tag_html = "".join(f'<span class="tag">{t}</span>' for t in tags[:3])
     score = v.get("funny_score") or 0
     title = v.get("title", "").replace('"', "&quot;").replace("<", "&lt;")
-    embed = v.get("embed_url", "").replace('"', "%22")
+    embed = v.get("embed_url") or ""
+    page_url = v.get("page_url") or ""
     category = (v.get("category") or "").replace('"', "&quot;")
+    platform = v.get("platform", "")
+
+    # 如果有 embed_url（B站 iframe）→ 内嵌播放
+    # 否则（抖音禁止 iframe）→ 点卡片外跳原站
+    data_attr = (
+        f'data-embed="{embed}"'
+        if embed
+        else f'data-href="{page_url}"'
+    )
+
     return (
-        f'<div class="card" data-embed="{embed}" data-score="{score}" data-cat="{category}">'
+        f'<div class="card" {data_attr} data-score="{score}" data-cat="{category}" data-platform="{platform}">'
         f'<div class="thumb">'
         f'<img loading="lazy" src="{v.get("cover_url","")}" alt="{title}">'
         f'<span class="score-badge">😂 {score}</span>'
