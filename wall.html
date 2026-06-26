@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>搞笑视频聚合墙</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #0f0f0f; color: #e0e0e0; font-family: system-ui, sans-serif; }
+header { padding: 16px 24px; background: #1a1a1a; display: flex; align-items: center; gap: 12px; }
+header h1 { font-size: 18px; font-weight: 600; }
+header .meta { margin-left: auto; font-size: 13px; color: #888; }
+.filters { padding: 12px 24px; background: #161616; display: flex; gap: 8px; flex-wrap: wrap; }
+.filters button {
+  padding: 4px 12px; border-radius: 20px; border: 1px solid #333;
+  background: transparent; color: #aaa; cursor: pointer; font-size: 13px;
+}
+.filters button.active, .filters button:hover { background: #fb7299; border-color: #fb7299; color: #fff; }
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+  padding: 20px 24px;
+}
+.card { background: #1e1e1e; border-radius: 10px; overflow: hidden; cursor: pointer; transition: transform .15s; }
+.card:hover { transform: translateY(-3px); }
+.thumb { position: relative; width: 100%; aspect-ratio: 16/9; background: #111; }
+.thumb img { width: 100%; height: 100%; object-fit: cover; }
+.score-badge {
+  position: absolute; top: 6px; right: 6px;
+  background: rgba(0,0,0,.7); color: #fb7299;
+  font-size: 12px; font-weight: 700; padding: 2px 7px; border-radius: 12px;
+}
+.card-body { padding: 10px 12px 12px; }
+.title { font-size: 14px; font-weight: 500; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.meta { display: flex; gap: 8px; margin-top: 6px; font-size: 12px; color: #666; align-items: center; flex-wrap: wrap; }
+.tag { background: #2a2a2a; padding: 2px 8px; border-radius: 10px; color: #aaa; }
+.play-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.85); display: flex;
+  align-items: center; justify-content: center; z-index: 100;
+}
+.play-overlay.hidden { display: none; }
+.player-wrap { position: relative; width: min(860px, 95vw); aspect-ratio: 16/9; }
+.player-wrap iframe { width: 100%; height: 100%; border: none; border-radius: 8px; }
+.close-btn {
+  position: absolute; top: -36px; right: 0;
+  background: none; border: none; color: #fff; font-size: 24px; cursor: pointer;
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>🎬 搞笑视频墙</h1>
+  <span class="meta">2026-06-26 · 30 条</span>
+</header>
+<div class="filters" id="filters">
+  <button class="active" data-min="0">全部</button>
+  <button data-min="7">评分 7+</button>
+  <button data-min="9">9+ 精选</button>
+  <button data-min="0" data-cat="手机游戏">手机游戏</button><button data-min="0" data-cat="单机游戏">单机游戏</button><button data-min="0" data-cat="日常">日常</button><button data-min="0" data-cat="同人·手书">同人·手书</button><button data-min="0" data-cat="搞笑">搞笑</button><button data-min="0" data-cat="GMV">GMV</button><button data-min="0" data-cat="人文历史">人文历史</button>
+</div>
+<div class="grid" id="grid">
+  <div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BV1J6jQ6REN2&autoplay=0" data-score="8" data-cat="同人·手书"><div class="thumb"><img loading="lazy" src="http://i0.hdslb.com/bfs/archive/d7d6738d98153f18e03a96d8dc7a02ff70d77c69.jpg" alt="除了学习什么都学的舅舅！！1~38超长合集！"><span class="score-badge">😂 8</span></div><div class="card-body"><div class="title">除了学习什么都学的舅舅！！1~38超长合集！</div><div class="meta"><span>猫meme电影院</span><span>▶ 381.5万</span><span>👍 25.9万</span></div><div class="meta" style="margin-top:4px"><span class="tag">搞笑</span><span class="tag">猫meme</span><span class="tag">合集</span></div></div></div>
+<div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BV1y77M6yEom&autoplay=0" data-score="8" data-cat="影视杂谈"><div class="thumb"><img loading="lazy" src="http://i2.hdslb.com/bfs/archive/256ef5234eb19cd62c1db20ad39acc94b69fd393.jpg" alt="“不好好学习就会像你爸一样啥都不懂”"><span class="score-badge">😂 8</span></div><div class="card-body"><div class="title">“不好好学习就会像你爸一样啥都不懂”</div><div class="meta"><span>我叫阿尔卑微</span><span>▶ 150.2万</span><span>👍 10.8万</span></div><div class="meta" style="margin-top:4px"><span class="tag">搞笑</span><span class="tag">亲子</span><span class="tag">吐槽</span></div></div></div>
+<div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BV1rz7569EWw&autoplay=0" data-score="8" data-cat="搞笑"><div class="thumb"><img loading="lazy" src="http://i0.hdslb.com/bfs/archive/61b59b6e7ba5d34592401ac162e800ef3a9ddf0f.jpg" alt="找到了10年前跪舔b站的视频"><span class="score-badge">😂 8</span></div><div class="card-body"><div class="title">找到了10年前跪舔b站的视频</div><div class="meta"><span>逗比的雀巢</span><span>▶ 97.9万</span><span>👍 17.4万</span></div><div class="meta" style="margin-top:4px"><span class="tag">搞笑</span><span class="tag">怀旧</span><span class="tag">鬼畜</span></div></div></div>
+<div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BV15Qj66mE5z&autoplay=0" data-score="7" data-cat="搞笑"><div class="thumb"><img loading="lazy" src="http://i1.hdslb.com/bfs/archive/fd70d470e4de0758969faf57cfd3f789c6e5e222.jpg" alt="快乐 童年"><span class="score-badge">😂 7</span></div><div class="card-body"><div class="title">快乐 童年</div><div class="meta"><span>榴莲阿呀</span><span>▶ 821.5万</span><span>👍 45.0万</span></div><div class="meta" style="margin-top:4px"><span class="tag">搞笑</span><span class="tag">童年</span><span class="tag">怀旧</span></div></div></div>
+<div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BV1oD7t6XEZ9&autoplay=0" data-score="7" data-cat="网络游戏"><div class="thumb"><img loading="lazy" src="http://i2.hdslb.com/bfs/archive/6833f595234d09f8b9324c5f550bc847e3369fe1.jpg" alt="【三角洲行动】所以...快乐会消失吗"><span class="score-badge">😂 7</span></div><div class="card-body"><div class="title">【三角洲行动】所以...快乐会消失吗</div><div class="meta"><span>胆小的火柴棍</span><span>▶ 77.6万</span><span>👍 6.0万</span></div><div class="meta" style="margin-top:4px"><span class="tag">搞笑</span><span class="tag">游戏实况</span><span class="tag">三角洲行动</span></div></div></div>
+<div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BV1Qn7q6NEci&autoplay=0" data-score="7" data-cat="综合"><div class="thumb"><img loading="lazy" src="http://i2.hdslb.com/bfs/archive/b213c63b551fd558503f5662fef930a4eefc89dd.jpg" alt="三个男人一台戏，这就是 三 角 洲  吗？"><span class="score-badge">😂 7</span></div><div class="card-body"><div class="title">三个男人一台戏，这就是 三 角 洲  吗？</div><div class="meta"><span>荟小荟</span><span>▶ 15.2万</span><span>👍 1.8万</span></div><div class="meta" style="margin-top:4px"><span class="tag">搞笑</span><span class="tag">恶搞</span><span class="tag">剧情</span></div></div></div>
+<div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BV1Pr786BE81&autoplay=0" data-score="7" data-cat="日常"><div class="thumb"><img loading="lazy" src="http://i0.hdslb.com/bfs/archive/b6620f43e8fa573178df3f0e006a85ca931c0b42.jpg" alt="人生第一次走山路被淋成落汤鸡…."><span class="score-badge">😂 7</span></div><div class="card-body"><div class="title">人生第一次走山路被淋成落汤鸡….</div><div class="meta"><span>拉宏桑</span><span>▶ 85.3万</span><span>👍 5.8万</span></div><div class="meta" style="margin-top:4px"><span class="tag">日常</span><span class="tag">搞笑</span><span class="tag">户外</span></div></div></div>
+<div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BV182jR67E93&autoplay=0" data-score="7" data-cat="鬼畜剧场"><div class="thumb"><img loading="lazy" src="http://i1.hdslb.com/bfs/archive/0eb9d6bbf50b8a63ed7293bb43748a9e5125ad95.jpg" alt="【朱元璋大电影】开局一个碗！（完整版）"><span class="score-badge">😂 7</span></div><div class="card-body"><div class="title">【朱元璋大电影】开局一个碗！（完整版）</div><div class="meta"><span>推背兔の</span><span>▶ 150.0万</span><span>👍 9.2万</span></div><div class="meta" style="margin-top:4px"><span class="tag">鬼畜</span><span class="tag">搞笑</span><span class="tag">历史改编</span></div></div></div>
+<div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BV11q7863ExJ&autoplay=0" data-score="7" data-cat="手机游戏"><div class="thumb"><img loading="lazy" src="http://i0.hdslb.com/bfs/archive/51772b2c6e877b78af4d9061c23509c72a6d248e.jpg" alt="你 喊 不 过 我 你 信 吗"><span class="score-badge">😂 7</span></div><div class="card-body"><div class="title">你 喊 不 过 我 你 信 吗</div><div class="meta"><span>萝太永不破防</span><span>▶ 278.7万</span><span>👍 18.0万</span></div><div class="meta" style="margin-top:4px"><span class="tag">搞笑</span><span class="tag">手机游戏</span><span class="tag">恶搞</span></div></div></div>
+<div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BV1FY7Y6rEDw&autoplay=0" data-score="7" data-cat="手机游戏"><div class="thumb"><img loading="lazy" src="http://i1.hdslb.com/bfs/archive/7d7e7def5eee036ae34cf7c3a8cbfdc414ba19f9.jpg" alt="《崩坏：星穹铁道》即兴巡演PV：「欢愉之死」"><span class="score-badge">😂 7</span></div><div class="card-body"><div class="title">《崩坏：星穹铁道》即兴巡演PV：「欢愉之死」</div><div class="meta"><span>崩坏星穹铁道</span><span>▶ 245.6万</span><span>👍 21.4万</span></div><div class="meta" style="margin-top:4px"><span class="tag">搞笑</span><span class="tag">游戏PV</span><span class="tag">崩坏星穹铁道</span></div></div></div>
+<div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BV1Hw7t64E8z&autoplay=0" data-score="6" data-cat="GMV"><div class="thumb"><img loading="lazy" src="http://i2.hdslb.com/bfs/archive/3758d7f47ab32a0bea6471513470c6c74f3d997e.jpg" alt="菲比：这趟旅行，是给你的惊喜【鸣潮x我的世界】"><span class="score-badge">😂 6</span></div><div class="card-body"><div class="title">菲比：这趟旅行，是给你的惊喜【鸣潮x我的世界】</div><div class="meta"><span>这下晚了</span><span>▶ 129.2万</span><span>👍 19.0万</span></div><div class="meta" style="margin-top:4px"><span class="tag">GMV</span><span class="tag">鸣潮</span><span class="tag">我的世界</span></div></div></div>
+<div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BV1RZ786dEot&autoplay=0" data-score="6" data-cat="单机游戏"><div class="thumb"><img loading="lazy" src="http://i2.hdslb.com/bfs/archive/9ed0f005a4fe8b7a064d0a046178b2640fb2a19b.jpg" alt="当我在MC中把反乌托邦、拼接遗憾和Sinos De Natal融合在了一起...?"><span class="score-badge">😂 6</span></div><div class="card-body"><div class="title">当我在MC中把反乌托邦、拼接遗憾和Sinos De Natal融合在了一起...?</div><div class="meta"><span>Vince丷</span><span>▶ 64.8万</span><span>👍 15.9万</span></div><div class="meta" style="margin-top:4px"><span class="tag">游戏</span><span class="tag">MC</span><span class="tag">创意</span></div></div></div>
+<div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BV1KY7t6KE83&autoplay=0" data-score="3" data-cat="同人·手书"><div class="thumb"><img loading="lazy" src="http://i0.hdslb.com/bfs/archive/7913400d670e5d78fba4f74965bd4214ca8fe8ef.jpg" alt="女忍者改造人 / 镜音铃"><span class="score-badge">😂 3</span></div><div class="card-body"><div class="title">女忍者改造人 / 镜音铃</div><div class="meta"><span>謎J_official</span><span>▶ 55.1万</span><span>👍 9.8万</span></div><div class="meta" style="margin-top:4px"><span class="tag">同人</span><span class="tag">手书</span><span class="tag">镜音铃</span></div></div></div>
+<div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BV1vvjR6REyP&autoplay=0" data-score="2" data-cat="手机游戏"><div class="thumb"><img loading="lazy" src="http://i2.hdslb.com/bfs/archive/cdfe8715c3a713a5797eba230682680a1a109af5.jpg" alt="《原神》桑多涅角色PV——「晨光熹微」"><span class="score-badge">😂 2</span></div><div class="card-body"><div class="title">《原神》桑多涅角色PV——「晨光熹微」</div><div class="meta"><span>原神</span><span>▶ 250.6万</span><span>👍 29.4万</span></div><div class="meta" style="margin-top:4px"><span class="tag">角色PV</span><span class="tag">原神</span><span class="tag">桑多涅</span></div></div></div>
+<div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BV1kGjt6dECk&autoplay=0" data-score="2" data-cat="乐评盘点"><div class="thumb"><img loading="lazy" src="http://i1.hdslb.com/bfs/archive/cefd9b1202147b34dad1ac9b56f937c441981a30.jpg" alt="萧敬腾首次公开的秘密:我曾讨厌自己的声音。丨HOPICOx萧敬腾 对谈50分"><span class="score-badge">😂 2</span></div><div class="card-body"><div class="title">萧敬腾首次公开的秘密:我曾讨厌自己的声音。丨HOPICOx萧敬腾 对谈50分</div><div class="meta"><span>HOPICO</span><span>▶ 576.4万</span><span>👍 7.2万</span></div><div class="meta" style="margin-top:4px"><span class="tag">音乐访谈</span><span class="tag">对谈</span><span class="tag">乐评</span></div></div></div>
+<div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BV1Tx7x6AEEW&autoplay=0" data-score="2" data-cat="日常"><div class="thumb"><img loading="lazy" src="http://i0.hdslb.com/bfs/archive/9ecf413bed3eb688af01c34b57bb86285fc0d909.jpg" alt="日本女生让我等她2年，说等她到20岁就要穿上礼服来找我。"><span class="score-badge">😂 2</span></div><div class="card-body"><div class="title">日本女生让我等她2年，说等她到20岁就要穿上礼服来找我。</div><div class="meta"><span>阳桃SunAndPeach</span><span>▶ 267.8万</span><span>👍 8.0万</span></div><div class="meta" style="margin-top:4px"><span class="tag">日常</span><span class="tag">跨国恋爱</span><span class="tag">情感</span></div></div></div>
+<div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BV1km736DE9j&autoplay=0" data-score="2" data-cat="日常"><div class="thumb"><img loading="lazy" src="http://i0.hdslb.com/bfs/archive/8b935522c81457c5781d24f6f28c664573932d69.jpg" alt="【VIVINOS】原创剧情🌠 Zombie Stage｜ROUND 1 Candy Scar"><span class="score-badge">😂 2</span></div><div class="card-body"><div class="title">【VIVINOS】原创剧情🌠 Zombie Stage｜ROUND 1 Candy Scar</div><div class="meta"><span>VIVINOS</span><span>▶ 27.4万</span><span>👍 3.1万</span></div><div class="meta" style="margin-top:4px"><span class="tag">原创动画</span><span class="tag">剧情</span><span class="tag">丧尸</span></div></div></div>
+<div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BV1Tz7a6mEyD&autoplay=0" data-score="2" data-cat="人文历史"><div class="thumb"><img loading="lazy" src="http://i1.hdslb.com/bfs/archive/82bed98f35340290326ba883b37cb6644c965d5c.jpg" alt="【28小时合集】一口气看完渤海小吏的西游原著精讲"><span class="score-badge">😂 2</span></div><div class="card-body"><div class="title">【28小时合集】一口气看完渤海小吏的西游原著精讲</div><div class="meta"><span>渤海小吏</span><span>▶ 37.7万</span><span>👍 2.9万</span></div><div class="meta" style="margin-top:4px"><span class="tag">人文历史</span><span class="tag">西游记</span><span class="tag">原著精讲</span></div></div></div>
+<div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BV1st7G6WEYR&autoplay=0" data-score="2" data-cat="数码"><div class="thumb"><img loading="lazy" src="http://i1.hdslb.com/bfs/archive/a84afbbc20cddd333feb5eba77c92c23b7d18170.jpg" alt="去了一趟潮汕。"><span class="score-badge">😂 2</span></div><div class="card-body"><div class="title">去了一趟潮汕。</div><div class="meta"><span>影视飓风</span><span>▶ 49.3万</span><span>👍 4.7万</span></div><div class="meta" style="margin-top:4px"><span class="tag">数码</span><span class="tag">旅行</span><span class="tag">潮汕</span></div></div></div>
+<div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BV1aq7P6LEJf&autoplay=0" data-score="2" data-cat="单机游戏"><div class="thumb"><img loading="lazy" src="http://i0.hdslb.com/bfs/archive/741744499a23d6de279b4667fca0fa6372aef1fa.jpg" alt="《白银之城》「二分法测试」PV | 黑马探戈 Black Knights' Tango"><span class="score-badge">😂 2</span></div><div class="card-body"><div class="title">《白银之城》「二分法测试」PV | 黑马探戈 Black Knights' Tango</div><div class="meta"><span>白银之城</span><span>▶ 311.9万</span><span>👍 4.4万</span></div><div class="meta" style="margin-top:4px"><span class="tag">游戏宣传</span><span class="tag">PV</span><span class="tag">二次元</span></div></div></div>
+<div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BV1zx7K6hEAR&autoplay=0" data-score="1" data-cat="单机游戏"><div class="thumb"><img loading="lazy" src="http://i0.hdslb.com/bfs/archive/3cf2fd5e4fb5df7947f42038ea9c477ebdbd8b5f.jpg" alt="《镇魂街王者归来》世界观PV | 成王之路：千机为序"><span class="score-badge">😂 1</span></div><div class="card-body"><div class="title">《镇魂街王者归来》世界观PV | 成王之路：千机为序</div><div class="meta"><span>镇魂街王者归来</span><span>▶ 73.7万</span><span>👍 3.6万</span></div><div class="meta" style="margin-top:4px"><span class="tag">游戏PV</span><span class="tag">世界观</span><span class="tag">CG动画</span></div></div></div>
+<div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BV1Yd7q63EAn&autoplay=0" data-score="1" data-cat="GMV"><div class="thumb"><img loading="lazy" src="http://i0.hdslb.com/bfs/archive/f9d96bde18f96b0ca0cfd626b4700832fffeafce.jpg" alt="野兽苏醒，谁为饵食？——敖尹「不驯者的游戏」PV公开！"><span class="score-badge">😂 1</span></div><div class="card-body"><div class="title">野兽苏醒，谁为饵食？——敖尹「不驯者的游戏」PV公开！</div><div class="meta"><span>恋与深空</span><span>▶ 69.4万</span><span>👍 8500</span></div><div class="meta" style="margin-top:4px"><span class="tag">GMV</span><span class="tag">游戏PV</span><span class="tag">乙女向</span></div></div></div>
+<div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BV1h1jo6dEpf&autoplay=0" data-score="1" data-cat="单机游戏"><div class="thumb"><img loading="lazy" src="http://i0.hdslb.com/bfs/archive/62d737c3a40c2aa521155cd28423d030e6d104e9.jpg" alt="《猿公剑》国风仙侠单机游戏｜最新预告片"><span class="score-badge">😂 1</span></div><div class="card-body"><div class="title">《猿公剑》国风仙侠单机游戏｜最新预告片</div><div class="meta"><span>猿公剑</span><span>▶ 155.1万</span><span>👍 2.8万</span></div><div class="meta" style="margin-top:4px"><span class="tag">单机游戏</span><span class="tag">仙侠</span><span class="tag">国风</span></div></div></div>
+<div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BV1WL7B6tELM&autoplay=0" data-score="1" data-cat="人文历史"><div class="thumb"><img loading="lazy" src="http://i2.hdslb.com/bfs/archive/d024cf897f37d6565e415db25de6e0ea6fdda592.jpg" alt="谁能接手英国乱局"><span class="score-badge">😂 1</span></div><div class="card-body"><div class="title">谁能接手英国乱局</div><div class="meta"><span>燕三嘤嘤嘤</span><span>▶ 96.6万</span><span>👍 6.8万</span></div><div class="meta" style="margin-top:4px"><span class="tag">国际时事</span><span class="tag">英国政治</span><span class="tag">人文历史</span></div></div></div>
+<div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BV1oZ7a6eEdG&autoplay=0" data-score="1" data-cat="出行"><div class="thumb"><img loading="lazy" src="http://i1.hdslb.com/bfs/archive/99aecfe9b1fec89c7198e74c46c8e4bf29cca213.jpg" alt="感谢大家这么支持《炎拳天使》，我觉得能一直尝试新项目是非常热血的！我也非常的热爱创作！感谢大家给我了这么多机会，我会用更多好看好玩的漫画，动画，游戏来回馈大家！"><span class="score-badge">😂 1</span></div><div class="card-body"><div class="title">感谢大家这么支持《炎拳天使》，我觉得能一直尝试新项目是非常热血的！我也非常的热爱创作！感谢大家给我了这么多机会，我会用更多好看好玩的漫画，动画，游戏来回馈大家！</div><div class="meta"><span>挪威老王</span><span>▶ 136.8万</span><span>👍 13.9万</span></div><div class="meta" style="margin-top:4px"><span class="tag">出行</span><span class="tag">日常</span><span class="tag">创作者</span></div></div></div>
+<div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BV1PFjG6SE2Q&autoplay=0" data-score="1" data-cat="单机游戏"><div class="thumb"><img loading="lazy" src="http://i2.hdslb.com/bfs/archive/0a5272a5041c5119ceac6251f77e33ec58b632b5.jpg" alt="诡秘之主玩法实机PV | 欢迎来到MMO新世界"><span class="score-badge">😂 1</span></div><div class="card-body"><div class="title">诡秘之主玩法实机PV | 欢迎来到MMO新世界</div><div class="meta"><span>诡秘之主游戏</span><span>▶ 647.1万</span><span>👍 24.3万</span></div><div class="meta" style="margin-top:4px"><span class="tag">游戏PV</span><span class="tag">MMO</span><span class="tag">实机演示</span></div></div></div>
+<div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BV1eD7G6BEx5&autoplay=0" data-score="1" data-cat="手机游戏"><div class="thumb"><img loading="lazy" src="http://i2.hdslb.com/bfs/archive/8ba2557c0ea4a1f5f6871564ff8c32f4af9750d6.jpg" alt="《鸣潮》玄方PV｜定玄"><span class="score-badge">😂 1</span></div><div class="card-body"><div class="title">《鸣潮》玄方PV｜定玄</div><div class="meta"><span>鸣潮</span><span>▶ 27.4万</span><span>👍 2.8万</span></div><div class="meta" style="margin-top:4px"><span class="tag">手机游戏</span><span class="tag">PV</span><span class="tag">二次元</span></div></div></div>
+<div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BV1dF7Y6AEto&autoplay=0" data-score="0" data-cat="亲子"><div class="thumb"><img loading="lazy" src="http://i0.hdslb.com/bfs/archive/7be2229247fecb7b403345cf8f707c9ec835a35e.jpg" alt="我最爱的视频！三代治沙人的努力，世界上即将消失的第一个沙漠！"><span class="score-badge">😂 0</span></div><div class="card-body"><div class="title">我最爱的视频！三代治沙人的努力，世界上即将消失的第一个沙漠！</div><div class="meta"><span>爱画画的子衿</span><span>▶ 107.6万</span><span>👍 16.0万</span></div><div class="meta" style="margin-top:4px"><span class="tag">亲子</span><span class="tag">教育</span><span class="tag">环保</span></div></div></div>
+<div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BV1gUjw6KEbr&autoplay=0" data-score="0" data-cat="科学·探索·自然"><div class="thumb"><img loading="lazy" src="http://i0.hdslb.com/bfs/archive/9d61068dfac1d8d94ac53dd88963b40677df2acf.jpg" alt="【纪录片】地球·劫后重生 中配版03 天降浩劫"><span class="score-badge">😂 0</span></div><div class="card-body"><div class="title">【纪录片】地球·劫后重生 中配版03 天降浩劫</div><div class="meta"><span>哔哩哔哩纪录片</span><span>▶ 69.0万</span><span>👍 2215</span></div><div class="meta" style="margin-top:4px"><span class="tag">纪录片</span><span class="tag">科学</span><span class="tag">自然</span></div></div></div>
+<div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BV1zi7Y6BEdS&autoplay=0" data-score="0" data-cat="手机游戏"><div class="thumb"><img loading="lazy" src="http://i1.hdslb.com/bfs/archive/a6ceb6c2928545a6a190e42a946738525cbf44c8.jpg" alt="《原神》超越PV——「骤雪」"><span class="score-badge">😂 0</span></div><div class="card-body"><div class="title">《原神》超越PV——「骤雪」</div><div class="meta"><span>原神</span><span>▶ 449.8万</span><span>👍 42.8万</span></div><div class="meta" style="margin-top:4px"><span class="tag">游戏PV</span><span class="tag">剧情</span><span class="tag">原神</span></div></div></div>
+</div>
+<div class="play-overlay hidden" id="overlay">
+  <div class="player-wrap">
+    <button class="close-btn" id="closeBtn">✕</button>
+    <iframe id="player" allowfullscreen></iframe>
+  </div>
+</div>
+<script>
+const overlay = document.getElementById('overlay');
+const player  = document.getElementById('player');
+document.getElementById('closeBtn').onclick = () => {
+  overlay.classList.add('hidden');
+  player.src = '';
+};
+overlay.onclick = (e) => { if (e.target === overlay) { overlay.classList.add('hidden'); player.src = ''; } };
+document.querySelectorAll('.card').forEach(card => {
+  card.onclick = () => {
+    player.src = card.dataset.embed;
+    overlay.classList.remove('hidden');
+  };
+});
+// 过滤
+const cards = [...document.querySelectorAll('.card')];
+document.getElementById('filters').addEventListener('click', e => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  document.querySelectorAll('#filters button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const min = parseInt(btn.dataset.min ?? '0');
+  const cat = btn.dataset.cat ?? '';
+  cards.forEach(c => {
+    const score = parseInt(c.dataset.score ?? '0');
+    const cardCat = c.dataset.cat ?? '';
+    const show = (min === 0 || score >= min) && (cat === '' || cardCat === cat);
+    c.style.display = show ? '' : 'none';
+  });
+});
+</script>
+</body>
+</html>

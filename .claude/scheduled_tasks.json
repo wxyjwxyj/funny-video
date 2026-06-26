@@ -1,0 +1,14 @@
+{
+  "tasks": [
+    {
+      "id": "d87063fa",
+      "cron": "37 */6 * * *",
+      "prompt": "python scripts/scheduler.py --once",
+      "createdAt": 1782482526606,
+      "recurring": true,
+      "createdBySessionId": "ef076ba1-1df8-4a23-8a73-6f6008deca34",
+      "createdByPid": 36920,
+      "createdByProcStart": "Sat Jun 20 03:12:37 2026"
+    }
+  ]
+}

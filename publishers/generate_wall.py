@@ -104,21 +104,29 @@ def _render_card(v: dict) -> str:
     )
 
 
-def generate(min_score: int = 0, output: Path | None = None) -> Path:
+def generate(min_score: int = 0, output: Path | None = None,
+             date: str | None = None) -> Path:
     """生成视频墙 HTML 文件。
 
     Args:
         min_score: 只展示 funny_score >= min_score 的视频（0 = 全部已打标签的）
         output: 输出路径，默认项目根目录 wall.html
+        date: 按 fetched_at 过滤日期（'YYYY-MM-DD'），None 默认今天
     """
     init_db(_DB_PATH)
     out = output or _OUTPUT
     template = _TEMPLATE.read_text(encoding="utf-8")
+    date_str = date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    sql = "SELECT * FROM videos WHERE funny_score >= ? AND status='active'"
+    params: list = [min_score]
+    # wall.html 默认只展示今天；archive 传 date 读取历史
+    sql += " AND date(fetched_at) = ?"
+    params.append(date_str)
 
     with contextlib.closing(get_connection(_DB_PATH)) as conn:
         rows = conn.execute(
-            "SELECT * FROM videos WHERE funny_score >= ? AND status='active' ORDER BY funny_score DESC, fetched_at DESC",
-            (min_score,),
+            f"{sql} ORDER BY funny_score DESC, fetched_at DESC", params,
         ).fetchall()
 
     videos = [dict(r) for r in rows]
@@ -144,16 +152,16 @@ def generate(min_score: int = 0, output: Path | None = None) -> Path:
         template
         .replace("{{generated_at}}", now)
         .replace("{{total}}", str(len(videos)))
+        .replace("{{date_label}}", date_str)
         .replace("{{category_buttons}}", cat_buttons)
         .replace("{{cards}}", cards_html)
     )
 
     out.write_text(html, encoding="utf-8")
-    logger.info("generate_wall: 已写入 %s（%d 条）", out, len(videos))
+    logger.info("generate_wall: 已写入 %s（%d 条，日期=%s）", out, len(videos), date_str)
 
     # 每次生成同步存档到 archive/YYYY-MM-DD.html
     _ARCHIVE_DIR.mkdir(exist_ok=True)
-    date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     archive_file = _ARCHIVE_DIR / f"{date_str}.html"
     archive_file.write_text(html, encoding="utf-8")
     _update_archive_index()
