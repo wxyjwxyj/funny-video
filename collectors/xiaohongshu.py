@@ -34,6 +34,7 @@ _EXTRACT_JS = (
     "var auth=c.querySelector('.author-wrapper .name');"
     "var lk=c.querySelector('.count');"
     "return {noteId:noteId,"
+    "pageUrl:href,"
     "title:t?t.textContent.trim():'',"
     "author:auth?auth.textContent.trim():'',"
     "likes:lk?lk.textContent.trim():'',"
@@ -154,7 +155,7 @@ def _map_video(item: dict, keyword: str = "") -> dict | None:
         "author": item.get("author", ""),
         "author_id": "",
         "cover_url": item.get("cover", ""),
-        "page_url": f"https://www.xiaohongshu.com/explore/{note_id}",
+        "page_url": item.get("pageUrl") or f"https://www.xiaohongshu.com/explore/{note_id}",
         "embed_url": None,
         "play_url": None,
         "duration": None,
