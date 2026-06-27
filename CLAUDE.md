@@ -81,7 +81,42 @@ collectors/xiaohongshu.py（CDP，阶段三）       ┘
 |------|------|------|
 | 0 | 项目骨架 + schema + 搬 utils | ✅ 完成 |
 | 1 | B站全链路（采集→去重→打标签→视频墙） | ✅ 完成 |
-| 2 | 抖音 CDP 采集 | 待开始 |
-| 3 | 小红书评估 + 定时自动化 | 进行中 |
+| 2 | 抖音 CDP 采集 | ✅ 完成（推荐流→搜索接口，3词限速） |
+| 3 | 小红书 CDP DOM抓取 + 定时自动化 | ✅ 完成 |
+| 4 | 视频号 TikHub API | ⏸ 暂停（API数据过期，内容不可靠） |
+| 5 | AI视频墙（B站搜索 CDP + 独立 topic） | ✅ 完成 |
+| 6 | GitHub Pages 上线 | ✅ 完成（wxyjwxyj.github.io/funny-video） |
+
+## 当前采集链路
+
+| 采集器 | 方式 | 关键词/来源 | 条数/次 |
+|--------|------|------------|--------|
+| `collectors/bilibili.py` | 公开热门API | 综合热门 | ~60 |
+| `collectors/douyin.py` | CDP 搜索 | 搞笑/沙雕/鬼畜 | ~28 |
+| `collectors/xiaohongshu.py` | CDP DOM | 搞笑/沙雕 | ~35 |
+| `collectors/bilibili_ai.py` | CDP DOM 搜索 | AI大模型/DeepSeek等9词 | ~150 |
+
+## 运行命令
+
+```bash
+# 搞笑视频（B站+抖音+小红书）
+python run.py --pages 3 --tag-batch 50
+
+# AI视频（B站搜索）
+python run_ai.py
+
+# 定时调度（每6小时）
+python scripts/scheduler.py --interval 6
+```
+
+## 输出文件
+
+| 文件 | 说明 |
+|------|------|
+| `index.html` | 主页入口 |
+| `wall.html` | 今日搞笑视频墙 |
+| `ai_wall.html` | 今日AI视频墙 |
+| `archive/` | 搞笑视频历史归档 |
+| `ai_archive/` | AI视频历史归档 |
 
 详见 `PROJECT_PLAN.md`。
