@@ -25,6 +25,7 @@ def main() -> None:
     p.add_argument("--skip-tag", action="store_true", help="跳过打标签，只采集+生成")
     p.add_argument("--skip-douyin", action="store_true", help="跳过抖音采集（CDP 不可用时）")
     p.add_argument("--skip-xhs", action="store_true", help="跳过小红书采集（CDP 不可用时）")
+    p.add_argument("--skip-wechat", action="store_true", help="跳过视频号采集（无 TIKHUB_API_TOKEN 时）")
     args = p.parse_args()
 
     init_db(_DB)
@@ -44,7 +45,16 @@ def main() -> None:
             except Exception as e:
                 logger.warning("抖音采集失败（降级跳过）: %s", e)
 
-        # 小红书（CDP，可选）
+        # 视频号（TikHub API，需 TIKHUB_API_TOKEN）
+        if not args.skip_wechat:
+            try:
+                from collectors.wechat_video import fetch_popular as fetch_wechat
+                wechat_videos = fetch_wechat()
+                if wechat_videos:
+                    dedup.run(wechat_videos)
+            except Exception as e:
+                logger.warning("视频号采集失败（降级跳过）: %s", e)
+
         if not args.skip_xhs:
             try:
                 from collectors.xiaohongshu import fetch_popular as fetch_xhs
