@@ -3,6 +3,7 @@
 
 CREATE TABLE IF NOT EXISTS videos (
     id                INTEGER PRIMARY KEY,
+    topic             TEXT DEFAULT 'funny',     -- funny / ai
     platform          TEXT NOT NULL,        -- bilibili / douyin / xiaohongshu
     platform_video_id TEXT NOT NULL,        -- 平台原始 ID（B站 bvid 等）
     title             TEXT,
@@ -27,6 +28,7 @@ CREATE TABLE IF NOT EXISTS videos (
     created_at        TEXT
 );
 
+CREATE INDEX IF NOT EXISTS idx_videos_topic      ON videos(topic);
 CREATE INDEX IF NOT EXISTS idx_videos_platform   ON videos(platform);
 CREATE INDEX IF NOT EXISTS idx_videos_funny       ON videos(funny_score);
 CREATE INDEX IF NOT EXISTS idx_videos_fetched     ON videos(fetched_at);

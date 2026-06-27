@@ -21,9 +21,11 @@ _OUTPUT = Path(__file__).parent.parent / "wall.html"
 _ARCHIVE_DIR = Path(__file__).parent.parent / "archive"
 
 
-def _update_archive_index() -> None:
+def _update_archive_index(archive_dir: Path, wall_path: Path) -> None:
     """重新生成 archive/index.html，列出所有历史日期。"""
-    files = sorted(_ARCHIVE_DIR.glob("????-??-??.html"), reverse=True)
+    files = sorted(archive_dir.glob("????-??-??.html"), reverse=True)
+    title = "AI 视频归档" if "ai" in archive_dir.name else "搞笑视频归档"
+    icon = "🤖" if "ai" in archive_dir.name else "📼"
     rows = ""
     for f in files:
         date = f.stem
@@ -31,12 +33,13 @@ def _update_archive_index() -> None:
         count = m.group(1) if m else "?"
         rows += f"<tr><td><a href='{f.name}'>{date}</a></td><td>{count} 条</td></tr>\n"
 
+    back_name = wall_path.name
     html = f"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>搞笑视频归档</title>
+<title>{title}</title>
 <style>
 *,*::before,*::after{{box-sizing:border-box;margin:0;padding:0}}
 body{{background:#0f0f0f;color:#e0e0e0;font-family:system-ui,sans-serif}}
@@ -57,10 +60,10 @@ tr:hover td{{background:#1e1e1e}}
 <body>
 <div class="container">
   <div class="header">
-    <h1>📼 搞笑视频归档</h1>
+    <h1>{icon} {title}</h1>
     <p>共 {len(files)} 天 · 点击日期查看当天内容</p>
   </div>
-  <a href="../wall.html" class="back">← 返回今日</a>
+  <a href="../{back_name}" class="back">← 返回今日</a>
   <table>
     <thead><tr><th>日期</th><th>视频数</th></tr></thead>
     <tbody>{rows}</tbody>
@@ -68,7 +71,7 @@ tr:hover td{{background:#1e1e1e}}
 </div>
 </body>
 </html>"""
-    (_ARCHIVE_DIR / "index.html").write_text(html, encoding="utf-8")
+    (archive_dir / "index.html").write_text(html, encoding="utf-8")
 
 
 def _format_num(n: int | None) -> str:
@@ -116,22 +119,34 @@ def _render_card(v: dict) -> str:
 
 
 def generate(min_score: int = 0, output: Path | None = None,
-             date: str | None = None) -> Path:
+             date: str | None = None, topic: str = "funny") -> Path:
     """生成视频墙 HTML 文件。
 
     Args:
-        min_score: 只展示 funny_score >= min_score 的视频（0 = 全部已打标签的）
-        output: 输出路径，默认项目根目录 wall.html
-        date: 按 fetched_at 过滤日期（'YYYY-MM-DD'），None 默认今天
+        min_score: 只展示 funny_score >= min_score 的视频
+        output: 输出路径，默认由 topic 决定（funny→wall.html，ai→ai_wall.html）
+        date: 按 fetched_at 过滤日期，None 默认今天
+        topic: funny 或 ai，决定查哪批数据和输出哪个文件
     """
     init_db(_DB_PATH)
-    out = output or _OUTPUT
+
+    # 根据 topic 决定输出文件和归档目录
+    root = Path(__file__).parent.parent
+    if output:
+        out = output
+        archive_dir = _ARCHIVE_DIR
+    elif topic == "ai":
+        out = root / "ai_wall.html"
+        archive_dir = root / "ai_archive"
+    else:
+        out = _OUTPUT
+        archive_dir = _ARCHIVE_DIR
+
     template = _TEMPLATE.read_text(encoding="utf-8")
     date_str = date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
-    sql = "SELECT * FROM videos WHERE funny_score >= ? AND status='active'"
-    params: list = [min_score]
-    # wall.html 默认只展示今天；archive 传 date 读取历史
+    sql = "SELECT * FROM videos WHERE funny_score >= ? AND status='active' AND topic=?"
+    params: list = [min_score, topic]
     sql += " AND date(fetched_at) = ?"
     params.append(date_str)
 
@@ -172,10 +187,10 @@ def generate(min_score: int = 0, output: Path | None = None,
     logger.info("generate_wall: 已写入 %s（%d 条，日期=%s）", out, len(videos), date_str)
 
     # 每次生成同步存档到 archive/YYYY-MM-DD.html
-    _ARCHIVE_DIR.mkdir(exist_ok=True)
-    archive_file = _ARCHIVE_DIR / f"{date_str}.html"
+    archive_dir.mkdir(exist_ok=True)
+    archive_file = archive_dir / f"{date_str}.html"
     archive_file.write_text(html, encoding="utf-8")
-    _update_archive_index()
+    _update_archive_index(archive_dir, out)
     logger.info("generate_wall: 已存档 %s", archive_file)
 
     return out

@@ -58,17 +58,38 @@ def _build_prompt(video: dict) -> str:
     )
 
 
-def run(batch_size: int = 20, workers: int = 5) -> int:
+def _build_ai_prompt(video: dict) -> str:
+    """AI 视频专用 prompt：评分维度是内容质量和信息量，而非搞笑程度。"""
+    like = video.get("like_count") or 0
+    play = video.get("play_count") or 1
+    return (
+        f"Video title: {video['title']}\n"
+        f"Category: {video.get('category', 'unknown')}\n"
+        f"Author: {video.get('author', 'unknown')}\n"
+        f"Duration: {video.get('duration', 0)}s\n"
+        f"Play count: {play:,}  Like count: {like:,}  "
+        f"Like ratio: {like/play:.2%}\n\n"
+        "Rate the quality and relevance of this AI/tech video. "
+        "Use the funny_score field as a quality score (0-10): "
+        "0=irrelevant or low quality, 5=decent AI/tech content, 10=must-watch insight or tutorial. "
+        "Focus on whether it provides genuine AI knowledge, news, tools, or analysis."
+    )
+
+
+def run(batch_size: int = 20, workers: int = 5, topic: str = "funny") -> int:
     """并发给一批未打标签的视频评分，返回处理条数。"""
-    videos = repository.list_untagged(limit=batch_size)
+    videos = repository.list_untagged(limit=batch_size, topic=topic)
     if not videos:
-        logger.info("tagging: 无待处理视频")
+        logger.info("tagging: 无待处理视频 (topic=%s)", topic)
         return 0
+
+    # AI 视频用不同的 prompt 和评分维度
+    prompt_fn = _build_ai_prompt if topic == "ai" else _build_prompt
 
     def _tag_one(v: dict) -> bool:
         try:
             result = claude_call_tool(
-                _build_prompt(v),
+                prompt_fn(v),
                 tool_name=_TOOL_NAME,
                 tool_description=_TOOL_DESC,
                 input_schema=_INPUT_SCHEMA,
