@@ -50,6 +50,7 @@ class XiaohongshuCollector:
         self.cdp_proxy = cdp_proxy
         self._session = retry_session()
         self._target_id: str = ""
+        self._keywords = list(_KEYWORDS)
 
     def _resolve_target(self) -> str:
         try:
@@ -72,7 +73,7 @@ class XiaohongshuCollector:
         seen: set[str] = set()
         results: list[dict] = []
 
-        for i, kw in enumerate(_KEYWORDS):
+        for i, kw in enumerate(self._keywords):
             if i > 0:
                 time.sleep(_REQUEST_DELAY)
             try:
@@ -173,5 +174,11 @@ def _map_video(item: dict, keyword: str = "") -> dict | None:
     }
 
 
-def fetch_popular(pages: int | None = None) -> list[dict]:
-    return XiaohongshuCollector().fetch_funny_videos()
+def fetch_popular(pages: int | None = None, keywords: list[str] | None = None, topic: str = "funny") -> list[dict]:
+    collector = XiaohongshuCollector()
+    if keywords:
+        collector._keywords = keywords
+    videos = collector.fetch_funny_videos()
+    for v in videos:
+        v["topic"] = topic
+    return videos

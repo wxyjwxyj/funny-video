@@ -30,6 +30,7 @@ class DouyinCollector:
         self.cdp_proxy = cdp_proxy
         self._session = retry_session()
         self._target_id: str = ""
+        self._keywords = list(_KEYWORDS)  # 可被外部覆盖
 
     def _resolve_target(self) -> str:
         try:
@@ -53,7 +54,7 @@ class DouyinCollector:
         seen: set[str] = set()
         results: list[dict] = []
 
-        for i, kw in enumerate(_KEYWORDS):
+        for i, kw in enumerate(self._keywords):
             if i > 0:
                 time.sleep(_REQUEST_DELAY)  # 限速，避免触发人机验证
             try:
@@ -152,5 +153,11 @@ def _map_video(aweme: dict, keyword: str = "") -> dict | None:
     }
 
 
-def fetch_popular(pages: int | None = None) -> list[dict]:
-    return DouyinCollector().fetch_funny_videos()
+def fetch_popular(pages: int | None = None, keywords: list[str] | None = None, topic: str = "funny") -> list[dict]:
+    collector = DouyinCollector()
+    if keywords:
+        collector._keywords = keywords  # 覆盖默认关键词
+    videos = collector.fetch_funny_videos()
+    for v in videos:
+        v["topic"] = topic
+    return videos
