@@ -179,7 +179,11 @@ def generate(min_score: int = 0, output: Path | None = None,
     # topic 决定页面标题和平台筛选按钮
     if topic == "ai":
         page_title = "🤖 AI 视频墙"
-        platform_buttons = '<button data-platform="bilibili">B站</button>'
+        platform_buttons = (
+            '<button data-platform="bilibili">B站</button>'
+            '<button data-platform="douyin">抖音</button>'
+            '<button data-platform="xiaohongshu">小红书</button>'
+        )
     else:
         page_title = "🎬 搞笑视频墙"
         platform_buttons = (
