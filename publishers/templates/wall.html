@@ -24,6 +24,15 @@ header .meta { margin-left: auto; font-size: 13px; color: #888; }
 }
 .card { background: #1e1e1e; border-radius: 10px; overflow: hidden; cursor: pointer; transition: transform .15s; }
 .card:hover { transform: translateY(-3px); }
+.card[data-platform="wechat_video"] { cursor: default; }
+.card[data-platform="wechat_video"]::after {
+  content: "请在微信中打开"; display: none;
+  position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%);
+  background: rgba(7,193,96,.9); color: #fff;
+  font-size: 12px; padding: 4px 10px; border-radius: 12px; white-space: nowrap;
+}
+.card[data-platform="wechat_video"]:hover::after { display: block; }
+.card[data-platform="wechat_video"] .thumb { position: relative; }
 .thumb { position: relative; width: 100%; aspect-ratio: 16/9; background: #111; }
 .thumb img { width: 100%; height: 100%; object-fit: cover; }
 .score-badge {
