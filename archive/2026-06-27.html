@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>搞笑视频聚合墙</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #0f0f0f; color: #e0e0e0; font-family: system-ui, sans-serif; }
+header { padding: 16px 24px; background: #1a1a1a; display: flex; align-items: center; gap: 12px; }
+header h1 { font-size: 18px; font-weight: 600; }
+header .meta { margin-left: auto; font-size: 13px; color: #888; }
+.filters { padding: 12px 24px; background: #161616; display: flex; gap: 8px; flex-wrap: wrap; }
+.filters button {
+  padding: 4px 12px; border-radius: 20px; border: 1px solid #333;
+  background: transparent; color: #aaa; cursor: pointer; font-size: 13px;
+}
+.filters button.active, .filters button:hover { background: #fb7299; border-color: #fb7299; color: #fff; }
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+  padding: 20px 24px;
+}
+.card { background: #1e1e1e; border-radius: 10px; overflow: hidden; cursor: pointer; transition: transform .15s; }
+.card:hover { transform: translateY(-3px); }
+.thumb { position: relative; width: 100%; aspect-ratio: 16/9; background: #111; }
+.thumb img { width: 100%; height: 100%; object-fit: cover; }
+.score-badge {
+  position: absolute; top: 6px; right: 6px;
+  background: rgba(0,0,0,.7); color: #fb7299;
+  font-size: 12px; font-weight: 700; padding: 2px 7px; border-radius: 12px;
+}
+.card-body { padding: 10px 12px 12px; }
+.title { font-size: 14px; font-weight: 500; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.meta { display: flex; gap: 8px; margin-top: 6px; font-size: 12px; color: #666; align-items: center; flex-wrap: wrap; }
+.tag { background: #2a2a2a; padding: 2px 8px; border-radius: 10px; color: #aaa; }
+.play-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.85); display: flex;
+  align-items: center; justify-content: center; z-index: 100;
+}
+.play-overlay.hidden { display: none; }
+.player-wrap { position: relative; width: min(860px, 95vw); aspect-ratio: 16/9; }
+.player-wrap iframe { width: 100%; height: 100%; border: none; border-radius: 8px; }
+.close-btn {
+  position: absolute; top: -36px; right: 0;
+  background: none; border: none; color: #fff; font-size: 24px; cursor: pointer;
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>🎬 搞笑视频墙</h1>
+  <span class="meta">2026-06-27 · 1 条</span>
+</header>
+<div class="filters" id="filters">
+  <button class="active" data-min="0">全部</button>
+  <button data-min="7">评分 7+</button>
+  <button data-min="9">9+ 精选</button>
+  
+</div>
+<div class="grid" id="grid">
+  <div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BVaaa&autoplay=0" data-score="8" data-cat="鬼畜" data-platform="bilibili"><div class="thumb"><img loading="lazy" src="http://example.com/cover.jpg" alt="搞笑视频BVaaa"><span class="score-badge">😂 8</span></div><div class="card-body"><div class="title">搞笑视频BVaaa</div><div class="meta"><span>UP</span><span>▶ 5.0万</span><span>👍 3000</span></div><div class="meta" style="margin-top:4px"><span class="tag">搞笑</span><span class="tag">鬼畜</span></div></div></div>
+</div>
+<div class="play-overlay hidden" id="overlay">
+  <div class="player-wrap">
+    <button class="close-btn" id="closeBtn">✕</button>
+    <iframe id="player" allowfullscreen></iframe>
+  </div>
+</div>
+<script>
+const overlay = document.getElementById('overlay');
+const player  = document.getElementById('player');
+document.getElementById('closeBtn').onclick = () => {
+  overlay.classList.add('hidden');
+  player.src = '';
+};
+overlay.onclick = (e) => { if (e.target === overlay) { overlay.classList.add('hidden'); player.src = ''; } };
+// 卡片点击：有 embed → iframe 内嵌；无 embed → 新标签页外跳
+document.querySelectorAll('.card').forEach(card => {
+  card.onclick = () => {
+    const embed = card.dataset.embed;
+    if (embed) {
+      player.src = embed;
+      overlay.classList.remove('hidden');
+    } else {
+      const href = card.dataset.href;
+      if (href) window.open(href, '_blank');
+    }
+  };
+});
+// 过滤
+const cards = [...document.querySelectorAll('.card')];
+document.getElementById('filters').addEventListener('click', e => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  document.querySelectorAll('#filters button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const min = parseInt(btn.dataset.min ?? '0');
+  const cat = btn.dataset.cat ?? '';
+  cards.forEach(c => {
+    const score = parseInt(c.dataset.score ?? '0');
+    const cardCat = c.dataset.cat ?? '';
+    const show = (min === 0 || score >= min) && (cat === '' || cardCat === cat);
+    c.style.display = show ? '' : 'none';
+  });
+});
+</script>
+</body>
+</html>
