@@ -57,6 +57,9 @@ header .meta { margin-left: auto; font-size: 13px; color: #888; }
   <button class="active" data-min="0">全部</button>
   <button data-min="7">评分 7+</button>
   <button data-min="9">9+ 精选</button>
+  <button data-platform="bilibili">B站</button>
+  <button data-platform="douyin">抖音</button>
+  <button data-platform="xiaohongshu">小红书</button>
   {{category_buttons}}
 </div>
 <div class="grid" id="grid">
@@ -89,7 +92,7 @@ document.querySelectorAll('.card').forEach(card => {
     }
   };
 });
-// 过滤
+// 过滤（评分 + 分区 + 平台）
 const cards = [...document.querySelectorAll('.card')];
 document.getElementById('filters').addEventListener('click', e => {
   const btn = e.target.closest('button');
@@ -98,10 +101,12 @@ document.getElementById('filters').addEventListener('click', e => {
   btn.classList.add('active');
   const min = parseInt(btn.dataset.min ?? '0');
   const cat = btn.dataset.cat ?? '';
+  const platform = btn.dataset.platform ?? '';
   cards.forEach(c => {
     const score = parseInt(c.dataset.score ?? '0');
-    const cardCat = c.dataset.cat ?? '';
-    const show = (min === 0 || score >= min) && (cat === '' || cardCat === cat);
+    const show = (min === 0 || score >= min)
+      && (cat === '' || c.dataset.cat === cat)
+      && (platform === '' || c.dataset.platform === platform);
     c.style.display = show ? '' : 'none';
   });
 });
