@@ -86,6 +86,7 @@ def _render_card(v: dict) -> str:
     tags = json.loads(v["tags"]) if v.get("tags") else []
     tag_html = "".join(f'<span class="tag">{t}</span>' for t in tags[:3])
     score = v.get("funny_score") or 0
+    score_icon = "🤖" if v.get("topic") == "ai" else "😂"
     title = v.get("title", "").replace('"', "&quot;").replace("<", "&lt;")
     embed = v.get("embed_url") or ""
     page_url = v.get("page_url") or ""
@@ -104,7 +105,7 @@ def _render_card(v: dict) -> str:
         f'<div class="card" {data_attr} data-score="{score}" data-cat="{category}" data-platform="{platform}">'
         f'<div class="thumb">'
         f'<img loading="lazy" referrerpolicy="no-referrer" src="{v.get("cover_url","")}" alt="{title}">'
-        f'<span class="score-badge">😂 {score}</span>'
+        f'<span class="score-badge">{score_icon} {score}</span>'
         f'</div>'
         f'<div class="card-body">'
         f'<div class="title">{title}</div>'
@@ -174,11 +175,27 @@ def generate(min_score: int = 0, output: Path | None = None,
     )
 
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+    # topic 决定页面标题和平台筛选按钮
+    if topic == "ai":
+        page_title = "🤖 AI 视频墙"
+        platform_buttons = '<button data-platform="bilibili">B站</button>'
+    else:
+        page_title = "🎬 搞笑视频墙"
+        platform_buttons = (
+            '<button data-platform="bilibili">B站</button>'
+            '<button data-platform="douyin">抖音</button>'
+            '<button data-platform="wechat_video">视频号</button>'
+            '<button data-platform="xiaohongshu">小红书</button>'
+        )
+
     html = (
         template
+        .replace("{{page_title}}", page_title)
         .replace("{{generated_at}}", now)
         .replace("{{total}}", str(len(videos)))
         .replace("{{date_label}}", date_str)
+        .replace("{{platform_buttons}}", platform_buttons)
         .replace("{{category_buttons}}", cat_buttons)
         .replace("{{cards}}", cards_html)
     )

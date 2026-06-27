@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>搞笑视频聚合墙</title>
+<title>{{page_title}}</title>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 body { background: #0f0f0f; color: #e0e0e0; font-family: system-ui, sans-serif; }
@@ -59,17 +59,14 @@ header .meta { margin-left: auto; font-size: 13px; color: #888; }
 </head>
 <body>
 <header>
-  <h1>🎬 搞笑视频墙</h1>
+  <h1>{{page_title}}</h1>
   <span class="meta">{{date_label}} · {{total}} 条</span>
 </header>
 <div class="filters" id="filters">
   <button class="active" data-min="0">全部</button>
   <button data-min="7">评分 7+</button>
   <button data-min="9">9+ 精选</button>
-  <button data-platform="bilibili">B站</button>
-  <button data-platform="douyin">抖音</button>
-  <button data-platform="wechat_video">视频号</button>
-  <button data-platform="xiaohongshu">小红书</button>
+  {{platform_buttons}}
   {{category_buttons}}
 </div>
 <div class="grid" id="grid">
