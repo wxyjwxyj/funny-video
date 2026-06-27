@@ -5,6 +5,7 @@
 只取视频笔记（封面链接含 /search_result/ 的卡片）。
 """
 import time
+import urllib.parse
 from datetime import datetime, timezone
 
 import requests
@@ -155,7 +156,7 @@ def _map_video(item: dict, keyword: str = "") -> dict | None:
         "author": item.get("author", ""),
         "author_id": "",
         "cover_url": item.get("cover", ""),
-        "page_url": item.get("pageUrl") or f"https://www.xiaohongshu.com/explore/{note_id}",
+        "page_url": f"https://www.xiaohongshu.com/search_result?keyword={urllib.parse.quote(title)}&type=51",
         "embed_url": None,
         "play_url": None,
         "duration": None,
