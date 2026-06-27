@@ -20,7 +20,7 @@ def main() -> None:
     p = argparse.ArgumentParser(description="搞笑视频聚合墙全链路")
     p.add_argument("--pages", type=int, default=5, help="B站热门采集页数（默认5=100条）")
     p.add_argument("--tag-batch", type=int, default=30, help="单次打标签批量（默认30）")
-    p.add_argument("--min-score", type=int, default=0, help="视频墙最低分（默认0=全部）")
+    p.add_argument("--min-score", type=int, default=5, help="视频墙最低分（默认5）")
     p.add_argument("--skip-collect", action="store_true", help="跳过采集，只打标签+生成")
     p.add_argument("--skip-tag", action="store_true", help="跳过打标签，只采集+生成")
     p.add_argument("--skip-douyin", action="store_true", help="跳过抖音采集（CDP 不可用时）")

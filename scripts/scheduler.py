@@ -23,7 +23,7 @@ logger = get_logger(__name__)
 _DB = Path(__file__).parent.parent / "video.db"
 
 
-def run_pipeline(pages: int = 5, tag_batch: int = 30, min_score: int = 0) -> None:
+def run_pipeline(pages: int = 5, tag_batch: int = 30, min_score: int = 5) -> None:
     """跑一次完整链路：采集 → 去重 → 打标签 → 生成视频墙。"""
     logger.info("==== 开始调度任务 ====")
     init_db(_DB)
@@ -44,7 +44,7 @@ def main() -> None:
     p.add_argument("--interval", type=float, default=24, help="间隔小时数（默认 24）")
     p.add_argument("--pages", type=int, default=5)
     p.add_argument("--tag-batch", type=int, default=30)
-    p.add_argument("--min-score", type=int, default=0)
+    p.add_argument("--min-score", type=int, default=5)
     p.add_argument("--once", action="store_true", help="只跑一次后退出")
     args = p.parse_args()
 
