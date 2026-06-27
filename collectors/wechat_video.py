@@ -91,11 +91,7 @@ def _map_video(item: dict, keyword: str) -> dict | None:
         "author": author,
         "author_id": jump.get("userName", ""),
         "cover_url": item.get("image", ""),
-        "page_url": (
-            f"https://channels.weixin.qq.com/web/pages/feed?feedNonceId={feed_nonce_id}"
-            if feed_nonce_id else
-            f"https://channels.weixin.qq.com/web/pages/search?keyword={requests.utils.quote(title)}"
-        ),
+        "page_url": f"https://channels.weixin.qq.com/finder-preview/pages/feed?feedId={export_id}",
         "embed_url": None,
         "play_url": None,
         "duration": duration,
