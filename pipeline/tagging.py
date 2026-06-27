@@ -76,15 +76,20 @@ def _build_ai_prompt(video: dict) -> str:
     )
 
 
-def run(batch_size: int = 20, workers: int = 5, topic: str = "funny") -> int:
+_PROMPT_FNS = {
+    "funny": _build_prompt,
+    "ai": _build_ai_prompt,
+}
+
+
+def run(batch_size: int = 20, workers: int = 5, topic: str = "funny", tag_prompt: str | None = None) -> int:
     """并发给一批未打标签的视频评分，返回处理条数。"""
     videos = repository.list_untagged(limit=batch_size, topic=topic)
     if not videos:
         logger.info("tagging: 无待处理视频 (topic=%s)", topic)
         return 0
 
-    # AI 视频用不同的 prompt 和评分维度
-    prompt_fn = _build_ai_prompt if topic == "ai" else _build_prompt
+    prompt_fn = _PROMPT_FNS.get(tag_prompt or topic, _build_prompt)
 
     def _tag_one(v: dict) -> bool:
         try:

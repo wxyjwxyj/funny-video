@@ -120,14 +120,12 @@ def _render_card(v: dict) -> str:
 
 
 def generate(min_score: int = 0, output: Path | None = None,
-             date: str | None = None, topic: str = "funny") -> Path:
+             date: str | None = None, topic: str = "funny",
+             platform_buttons: list[tuple[str, str]] | None = None) -> Path:
     """生成视频墙 HTML 文件。
 
     Args:
-        min_score: 只展示 funny_score >= min_score 的视频
-        output: 输出路径，默认由 topic 决定（funny→wall.html，ai→ai_wall.html）
-        date: 按 fetched_at 过滤日期，None 默认今天
-        topic: funny 或 ai，决定查哪批数据和输出哪个文件
+        platform_buttons: [(platform_key, label), ...] 覆盖默认按钮
     """
     init_db(_DB_PATH)
 
@@ -176,22 +174,15 @@ def generate(min_score: int = 0, output: Path | None = None,
 
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
-    # topic 决定页面标题和平台筛选按钮
-    if topic == "ai":
-        page_title = "🤖 AI 视频墙"
-        platform_buttons = (
-            '<button data-platform="bilibili">B站</button>'
-            '<button data-platform="douyin">抖音</button>'
-            '<button data-platform="xiaohongshu">小红书</button>'
-        )
-    else:
-        page_title = "🎬 搞笑视频墙"
-        platform_buttons = (
-            '<button data-platform="bilibili">B站</button>'
-            '<button data-platform="douyin">抖音</button>'
-            '<button data-platform="wechat_video">视频号</button>'
-            '<button data-platform="xiaohongshu">小红书</button>'
-        )
+    # 标题和平台按钮：优先使用外部传入，否则按 topic 默认
+    _defaults = {
+        "funny": ("🎬 搞笑视频墙", [("bilibili","B站"),("douyin","抖音"),("wechat_video","视频号"),("xiaohongshu","小红书")]),
+        "ai":    ("🤖 AI 视频墙",  [("bilibili","B站"),("douyin","抖音"),("xiaohongshu","小红书")]),
+    }
+    default_title, default_btns = _defaults.get(topic, ("🎬 搞笑视频墙", []))
+    page_title = default_title
+    pb_list = platform_buttons if platform_buttons is not None else default_btns
+    pb_html = "".join(f'<button data-platform="{k}">{v}</button>' for k, v in pb_list)
 
     html = (
         template
@@ -199,7 +190,7 @@ def generate(min_score: int = 0, output: Path | None = None,
         .replace("{{generated_at}}", now)
         .replace("{{total}}", str(len(videos)))
         .replace("{{date_label}}", date_str)
-        .replace("{{platform_buttons}}", platform_buttons)
+        .replace("{{platform_buttons}}", pb_html)
         .replace("{{category_buttons}}", cat_buttons)
         .replace("{{cards}}", cards_html)
     )
