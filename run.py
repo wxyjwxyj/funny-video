@@ -25,7 +25,7 @@ def main() -> None:
     p.add_argument("--skip-tag", action="store_true", help="跳过打标签，只采集+生成")
     p.add_argument("--skip-douyin", action="store_true", help="跳过抖音采集（CDP 不可用时）")
     p.add_argument("--skip-xhs", action="store_true", help="跳过小红书采集（CDP 不可用时）")
-    p.add_argument("--skip-wechat", action="store_true", help="跳过视频号采集（无 TIKHUB_API_TOKEN 时）")
+    p.add_argument("--skip-wechat", action="store_true", default=True, help="跳过视频号采集（默认跳过，内容不稳定）")
     args = p.parse_args()
 
     init_db(_DB)
