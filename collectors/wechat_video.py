@@ -4,6 +4,7 @@ TikHub 已逆向 channels.weixin.qq.com 的 HTTP 接口，
 通过统一搜索 API (fetch_search, business_type=video) 关键词搜索视频号内容。
 纯 HTTP 请求，不需要 Hook/MITM/特定微信版本。
 """
+import json
 import os
 import re
 from datetime import datetime, timezone
@@ -56,6 +57,13 @@ def _map_video(item: dict, keyword: str) -> dict | None:
         return None
 
     jump = item.get("jumpInfo") or {}
+    # extInfo 是 JSON 字符串，解析出 feedNonceId
+    ext_str = jump.get("extInfo", "") or ""
+    try:
+        ext = json.loads(ext_str) if isinstance(ext_str, str) else ext_str
+        feed_nonce_id = ext.get("feedNonceId", "")
+    except Exception:
+        feed_nonce_id = ""
     title = item.get("title", "")
     # 去掉高亮标签 <em class="highlight">
     import re
@@ -83,7 +91,11 @@ def _map_video(item: dict, keyword: str) -> dict | None:
         "author": author,
         "author_id": jump.get("userName", ""),
         "cover_url": item.get("image", ""),
-        "page_url": f"https://channels.weixin.qq.com/finder-preview/pages/feed?feedId={export_id}",
+        "page_url": (
+            f"https://channels.weixin.qq.com/web/pages/feed?feedNonceId={feed_nonce_id}"
+            if feed_nonce_id else
+            f"https://channels.weixin.qq.com/web/pages/search?keyword={requests.utils.quote(title)}"
+        ),
         "embed_url": None,
         "play_url": None,
         "duration": duration,
