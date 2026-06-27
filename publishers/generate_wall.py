@@ -100,7 +100,7 @@ def _render_card(v: dict) -> str:
     return (
         f'<div class="card" {data_attr} data-score="{score}" data-cat="{category}" data-platform="{platform}">'
         f'<div class="thumb">'
-        f'<img loading="lazy" src="{v.get("cover_url","")}" alt="{title}">'
+        f'<img loading="lazy" referrerpolicy="no-referrer" src="{v.get("cover_url","")}" alt="{title}">'
         f'<span class="score-badge">😂 {score}</span>'
         f'</div>'
         f'<div class="card-body">'
