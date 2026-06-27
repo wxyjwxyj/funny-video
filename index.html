@@ -10,7 +10,7 @@ body{background:#0f0f0f;color:#e0e0e0;font-family:system-ui,sans-serif;min-heigh
 .container{text-align:center;padding:40px 24px}
 h1{font-size:32px;font-weight:700;margin-bottom:8px}
 .sub{color:#666;font-size:15px;margin-bottom:48px}
-.cards{display:flex;gap:16px;justify-content:center;flex-wrap:wrap}
+.row{display:flex;gap:16px;justify-content:center;margin-bottom:16px}
 .card{
   background:#1e1e1e;border-radius:16px;padding:32px 40px;
   text-decoration:none;color:inherit;
@@ -26,21 +26,23 @@ h1{font-size:32px;font-weight:700;margin-bottom:8px}
 <div class="container">
   <h1>🎬 搞笑视频聚合墙</h1>
   <p class="sub">B站 · 抖音 · 小红书 · 每天自动更新</p>
-  <div class="cards">
+  <div class="row">
     <a href="wall.html" class="card">
       <div class="icon">📺</div>
       <div class="label">搞笑视频</div>
       <div class="desc">今天采集的搞笑视频</div>
     </a>
+    <a href="archive/index.html" class="card">
+      <div class="icon">📼</div>
+      <div class="label">搞笑归档</div>
+      <div class="desc">过去每天的搞笑视频</div>
+    </a>
+  </div>
+  <div class="row">
     <a href="ai_wall.html" class="card">
       <div class="icon">🤖</div>
       <div class="label">AI 视频</div>
       <div class="desc">AI资讯、大模型、工具教程</div>
-    </a>
-    <a href="archive/index.html" class="card">
-      <div class="icon">📼</div>
-      <div class="label">搞笑归档</div>
-      <div class="desc">查看过去每天的视频</div>
     </a>
     <a href="ai_archive/index.html" class="card">
       <div class="icon">📚</div>
