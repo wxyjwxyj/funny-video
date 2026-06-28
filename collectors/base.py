@@ -5,6 +5,7 @@
 - 注册表: register_collector / create_collector，registry 用名字引用而非函数指针
 """
 
+import random
 import time
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
@@ -99,7 +100,8 @@ class CDPCollector(BaseCollector):
 
         for i, kw in enumerate(keywords):
             if i > 0:
-                time.sleep(self.request_delay)
+                # 带 ±40% 随机抖动，避免固定间隔被识别为机器人
+                time.sleep(self.request_delay * random.uniform(0.6, 1.4))
             try:
                 items = self._search(kw)
                 for item in items:

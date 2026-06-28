@@ -115,7 +115,7 @@ class BilibiliSearchCollector(CDPCollector):
     default_keywords = ["DeepSeek", "Kimi", "通义千问", "ChatGPT", "Claude", "Gemini",
                         "AI Agent", "AI工具", "AI视频", "AI绘画", "大模型"]
     per_keyword = 5
-    request_delay = 1.5
+    request_delay = 3.0
     page_wait = 3.0
     content_hash_prefix = "bilibili_search"
     keywords: list[str] = []  # 运行时覆盖
