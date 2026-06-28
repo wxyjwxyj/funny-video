@@ -144,7 +144,7 @@ def generate(topic: str = "funny", min_score: int = 7, output: Path | None = Non
 
     sql = "SELECT * FROM videos WHERE funny_score >= ? AND status='active' AND topic=?"
     params: list = [min_score, topic]
-    sql += " AND date(fetched_at) = ?"
+    sql += " AND date(created_at) = ?"
     params.append(date_str)
 
     with contextlib.closing(get_connection(_DB_PATH)) as conn:
