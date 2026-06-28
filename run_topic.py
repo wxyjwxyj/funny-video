@@ -8,6 +8,8 @@ import argparse
 from pathlib import Path
 
 from collectors.base import create_collector
+import collectors.douyin  # noqa: F401 - 触发 @register_collector
+import collectors.xiaohongshu  # noqa: F401 - 触发 @register_collector
 from pipeline import dedup, tagging
 from publishers.generate_wall import generate
 from storage.db import init_db
