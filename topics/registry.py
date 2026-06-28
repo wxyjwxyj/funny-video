@@ -7,11 +7,11 @@ from collectors.bilibili import FUNNY_CATEGORIES
 from topics.config import CollectorDef, TopicConfig
 
 # ── 关键词 ──────────────────────────────────────────────────
-_DOUYIN_FUNNY_KW = ["搞笑", "沙雕", "鬼畜"]
-_XHS_FUNNY_KW = ["搞笑", "沙雕"]
+_DOUYIN_FUNNY_KW = ["搞笑配音", "沙雕动画", "整活"]
+_XHS_FUNNY_KW = ["整活", "搞笑合集"]
 
-_DOUYIN_AI_KW = ["AI大模型", "DeepSeek", "可灵AI", "Claude AI", "人工智能"]
-_XHS_AI_KW = ["AI大模型", "DeepSeek", "可灵AI", "即梦AI"]
+_AI_KW = ["DeepSeek", "Kimi", "通义千问", "ChatGPT", "Claude", "Gemini", "AI Agent"]
+_XHS_AI_KW = ["可灵AI", "即梦AI", "AI绘画", "Midjourney", "Suno", "DeepSeek"]
 
 
 def _build_topics() -> dict[str, TopicConfig]:
@@ -38,11 +38,11 @@ def _build_topics() -> dict[str, TopicConfig]:
             display_name="🤖 AI 视频墙",
             collectors=[
                 CollectorDef("bilibili_search",
-                             {"keywords": _DOUYIN_AI_KW,
+                             {"keywords": _AI_KW,
                               "content_hash_prefix": "bilibili_ai"},
                              platform="bilibili"),
                 CollectorDef("douyin_search",
-                             {"keywords": _DOUYIN_AI_KW},
+                             {"keywords": _AI_KW},
                              skip_flag="douyin"),
                 CollectorDef("xiaohongshu_search",
                              {"keywords": _XHS_AI_KW},
