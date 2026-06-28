@@ -41,11 +41,17 @@ def _load_dotenv() -> None:
 _load_dotenv()
 
 
+_config_warned = False
+
+
 def _load_config_file() -> dict:
+    global _config_warned
     try:
         return json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
     except FileNotFoundError:
-        logger.warning("config.json 不存在，请复制 config.example.json 并填写")
+        if not _config_warned:
+            logger.warning("config.json 不存在，请复制 config.example.json 并填写")
+            _config_warned = True
         return {}
     except json.JSONDecodeError as e:
         logger.error("config.json 格式错误: %s", e)

@@ -24,17 +24,20 @@ logger = get_logger(__name__)
 _DB = Path(__file__).parent.parent / "video.db"
 _ROOT = Path(__file__).parent.parent
 
-# 每次生成的输出文件集合（由 run_pipeline 生成，由 scheduler 负责提交推送）
-_EXPECTED_FILES = ["wall.html", "ai_wall.html", "archive/", "ai_archive/", "index.html"]
+# 每次生成的输出文件（由 run_pipeline 生成，由 scheduler 负责提交推送）
+_EXPECTED_FILES = ["funny_wall.html", "ai_wall.html", "funny_archive/", "ai_archive/", "index.html"]
 
 
 def _get_changed_files() -> list[str]:
-    """返回 git status --short 中修改/新增的文件。"""
-    result = subprocess.run(
-        ["git", "status", "--short"],
-        capture_output=True, text=True, cwd=_ROOT,
-    )
-    return [line[3:] for line in result.stdout.strip().split("\n") if line[:3].strip()]
+    """返回 git 工作区中修改/新增的文件路径。"""
+    files: set[str] = set()
+    for args in (
+        ["git", "diff", "--name-only"],
+        ["git", "diff", "--cached", "--name-only"],
+    ):
+        r = subprocess.run(args, capture_output=True, text=True, cwd=_ROOT)
+        files.update(f for f in r.stdout.strip().split("\n") if f)
+    return list(files)
 
 
 def _push_walls() -> None:

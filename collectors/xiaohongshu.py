@@ -72,7 +72,7 @@ class XiaohongshuCollector(CDPCollector):
             content_hash_prefix="xiaohongshu", topic=self.topic,
             title=title, author=item.get("author", ""),
             cover_url=item.get("cover", ""), like_count=like_count,
-            page_url=f"https://www.xiaohongshu.com/search_result?keyword={urllib.parse.quote(title)}&type=51",
+            page_url=item.get("pageUrl", ""),
             extra={"search_keyword": keyword},
         )
 
