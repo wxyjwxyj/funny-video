@@ -1,5 +1,6 @@
 """抖音视频采集器（CDP 复用浏览器登录态）。"""
 import json
+import re
 import uuid
 
 from collectors.base import (
@@ -61,6 +62,9 @@ class DouyinCollector(CDPCollector):
         stats = item.get("statistics") or {}
         title = item.get("desc") or item.get("preview_title") or ""
         if not title.strip():
+            return None
+        # 去掉hashtag后没有实质内容的过滤掉（如 "#搞笑配音" 无法显示给用户）
+        if len(re.sub(r'#\S+', '', title).strip()) < 3:
             return None
         covers = (video_info.get("cover") or {}).get("url_list") or []
         return make_video(
