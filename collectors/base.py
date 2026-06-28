@@ -6,7 +6,6 @@
 """
 
 import time
-import urllib.parse
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
 from typing import Any
@@ -139,11 +138,10 @@ class CDPCollector(BaseCollector):
         )
 
     def _navigate(self, url: str) -> None:
-        nav_js = f"window.location.href={urllib.parse.quote(url)!r}; 'ok'"
         try:
             self._session.post(
-                f"{self.cdp_proxy}/eval?target={self._target_id}",
-                data=nav_js.encode(), timeout=10,
+                f"{self.cdp_proxy}/navigate?target={self._target_id}",
+                data=url.encode(), timeout=30,
             )
         except requests.RequestException as e:
             raise CollectorError(f"CDP 导航失败: {e}") from e
