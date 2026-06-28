@@ -27,7 +27,7 @@ class DouyinCollector(CDPCollector):
         kw_js = json.dumps(keyword, ensure_ascii=False)
         sid = str(uuid.uuid4())
         js = (
-            f"function(){{"
+            f"(function(){{"
             f"var kw=encodeURIComponent({kw_js});"
             f"var url='https://www.douyin.com/aweme/v1/web/search/item/'"
             f"+'?keyword='+kw+'&count={self.per_keyword}&offset=0'"
@@ -36,7 +36,7 @@ class DouyinCollector(CDPCollector):
             f"xhr.open('GET',url,false);"
             f"xhr.setRequestHeader('Referer','https://www.douyin.com/');"
             f"xhr.send();return JSON.parse(xhr.responseText);"
-            f"}}()"
+            f"}})()"
         )
         raw = self._eval(js, timeout=15) or {}
         code = raw.get("status_code", 0)
@@ -45,7 +45,9 @@ class DouyinCollector(CDPCollector):
             if nil == "verify_check" or code in (2483, 8, 9):
                 raise LoginExpiredError(f"抖音触发人机验证 (code={code})")
             raise CollectorError(f"抖音搜索返回 status_code={code}")
-        return raw.get("data") or []
+        # 新版 API 把视频信息嵌套在 aweme_info 里，提取到顶层兼容 _map_item
+        items = raw.get("data") or []
+        return [{**item.get("aweme_info", {}), **{k: v for k, v in item.items() if k != "aweme_info"}} for item in items]
 
     def _map_item(self, item: dict, keyword: str) -> dict | None:
         aweme_id = item.get("aweme_id", "")
