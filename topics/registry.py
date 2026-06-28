@@ -10,7 +10,8 @@ from topics.config import CollectorDef, TopicConfig
 _DOUYIN_FUNNY_KW = ["搞笑配音", "沙雕动画", "整活"]
 _XHS_FUNNY_KW = ["整活", "搞笑合集"]
 
-_AI_KW = ["DeepSeek", "Kimi", "通义千问", "ChatGPT", "Claude", "Gemini", "AI Agent"]
+_AI_KW = ["DeepSeek", "Kimi", "通义千问", "ChatGPT", "Claude", "Gemini", "AI Agent",
+          "AI工具", "AI视频", "AI绘画", "大模型"]
 _XHS_AI_KW = ["可灵AI", "即梦AI", "AI绘画", "Midjourney", "Suno", "DeepSeek"]
 
 
