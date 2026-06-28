@@ -114,7 +114,7 @@ class BilibiliSearchCollector(CDPCollector):
     domain_pattern = "bilibili.com"
     default_keywords = ["AI大模型", "DeepSeek", "Kimi AI", "Claude AI",
                         "可灵AI", "Vidu AI", "即梦AI", "人工智能教程", "大模型应用"]
-    per_keyword = 10
+    per_keyword = 5
     request_delay = 1.5
     page_wait = 3.0
     content_hash_prefix = "bilibili_search"
