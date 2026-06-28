@@ -7,7 +7,7 @@
 import argparse
 from pathlib import Path
 
-from collectors.base import create_collector, list_collectors
+from collectors.base import create_collector
 from pipeline import dedup, tagging
 from publishers.generate_wall import generate
 from storage.db import init_db
