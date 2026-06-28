@@ -24,7 +24,8 @@ _ARCHIVE_DIR = Path(__file__).parent.parent / "archive"
 def _update_archive_index(archive_dir: Path, wall_path: Path) -> None:
     """重新生成 archive/index.html，列出所有历史日期。"""
     files = sorted(archive_dir.glob("????-??-??.html"), reverse=True)
-    title = "AI 视频归档" if "ai" in archive_dir.name else "搞笑视频归档"
+    icon = "🤖" if "ai" in archive_dir.name else "📼"
+    title = f"{icon} {archive_dir.name} 归档"
     icon = "🤖" if "ai" in archive_dir.name else "📼"
     rows = ""
     for f in files:
@@ -86,7 +87,7 @@ def _render_card(v: dict) -> str:
     tags = json.loads(v["tags"]) if v.get("tags") else []
     tag_html = "".join(f'<span class="tag">{t}</span>' for t in tags[:3])
     score = v.get("funny_score") or 0
-    score_icon = "🤖" if v.get("topic") == "ai" else "😂"
+    score_icon = "🤖" if v.get("topic") != "funny" else "😂"
     title = v.get("title", "").replace('"', "&quot;").replace("<", "&lt;")
     embed = v.get("embed_url") or ""
     page_url = v.get("page_url") or ""
@@ -133,12 +134,10 @@ def generate(topic: str = "funny", min_score: int = 7, output: Path | None = Non
     if output:
         out = output
         archive_dir = _ARCHIVE_DIR
-    elif topic == "ai":
-        out = root / "ai_wall.html"
-        archive_dir = root / "ai_archive"
     else:
-        out = _OUTPUT
-        archive_dir = _ARCHIVE_DIR
+        safe = re.sub(r"[^a-zA-Z0-9_-]", "_", topic)
+        out = root / f"{safe}_wall.html"
+        archive_dir = root / f"{safe}_archive"
 
     template = _TEMPLATE.read_text(encoding="utf-8")
     date_str = date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -173,11 +172,8 @@ def generate(topic: str = "funny", min_score: int = 7, output: Path | None = Non
 
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
-    # 标题和平台按钮：有外部传入用外部，否则从 topic 推导
-    if display_name:
-        page_title = display_name
-    else:
-        page_title = {"funny": "🎬 搞笑视频墙", "ai": "🤖 AI 视频墙"}.get(topic, "🎬 视频墙")
+    # 标题：有外部传入用外部，否则从 topic 推导（display_name 在 registry 已定义）
+    page_title = display_name or f"🎬 {topic} 视频墙"
 
     # 平台切换按钮：页面内置默认值
     pb_list = [("bilibili", "B站"), ("douyin", "抖音"), ("wechat_video", "视频号"), ("xiaohongshu", "小红书")]

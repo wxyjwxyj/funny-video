@@ -3,6 +3,7 @@
 采集器用注册表字符串名引用（base._collector_registry），禁用函数指针。
 只依赖 topics.config，不 import 任何 collectors。"""
 
+from collectors.bilibili import FUNNY_CATEGORIES
 from topics.config import CollectorDef, TopicConfig
 
 # ── 关键词 ──────────────────────────────────────────────────
@@ -20,7 +21,7 @@ def _build_topics() -> dict[str, TopicConfig]:
             display_name="🎬 搞笑视频墙",
             collectors=[
                 CollectorDef("bilibili_popular",
-                             {"pages": 5, "categories": "FUNNY_CATEGORIES"},
+                             {"pages": 5, "categories": FUNNY_CATEGORIES},
                              platform="bilibili"),
                 CollectorDef("douyin_search",
                              {"keywords": _DOUYIN_FUNNY_KW},

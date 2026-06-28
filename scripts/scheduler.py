@@ -1,4 +1,4 @@
-"""定时调度：每隔指定小时数跑一次完整链路（所有 topic）。
+"""定时调度：采集 → 去重 → 打标签 → 生成视频墙 → 自动 git commit + push。
 
 用法：
     python scripts/scheduler.py              # 默认每 6 小时跑一次
@@ -8,6 +8,7 @@
 scheduler 是薄层，核心逻辑复用 run_topic.run_pipeline()。
 """
 import argparse
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -21,10 +22,49 @@ from utils.log import get_logger
 
 logger = get_logger(__name__)
 _DB = Path(__file__).parent.parent / "video.db"
+_ROOT = Path(__file__).parent.parent
+
+# 每次生成的输出文件集合（由 run_pipeline 生成，由 scheduler 负责提交推送）
+_EXPECTED_FILES = ["wall.html", "ai_wall.html", "archive/", "ai_archive/", "index.html"]
+
+
+def _get_changed_files() -> list[str]:
+    """返回 git status --short 中修改/新增的文件。"""
+    result = subprocess.run(
+        ["git", "status", "--short"],
+        capture_output=True, text=True, cwd=_ROOT,
+    )
+    return [line[3:] for line in result.stdout.strip().split("\n") if line[:3].strip()]
+
+
+def _push_walls() -> None:
+    """将新生成的 wall 文件 commit 并 push 到 GitHub Pages。"""
+    changed = _get_changed_files()
+    # 只关心 wall/archive 相关文件
+    targets = [f for f in changed if any(
+        f.startswith(p.replace("/", "")) or p.replace("/", "") in f
+        for p in _EXPECTED_FILES
+    )]
+    if not targets:
+        logger.info("无视频墙文件变更，跳过推送")
+        return
+
+    logger.info("推送文件: %s", targets)
+    subprocess.run(["git", "add"] + targets, cwd=_ROOT, check=False)
+    today = time.strftime("%Y-%m-%d")
+    result = subprocess.run(
+        ["git", "commit", "-m", f"content: {today} video walls --auto"],
+        capture_output=True, text=True, cwd=_ROOT,
+    )
+    if "nothing to commit" in (result.stdout + result.stderr):
+        logger.info("无实际变更，跳过 commit")
+        return
+    subprocess.run(["git", "push"], cwd=_ROOT, check=False)
+    logger.info("GitHub Pages 推送完成")
 
 
 def run_all(tag_batch: int = 50, min_score: int | None = None) -> None:
-    """跑所有 topic 的完整链路。"""
+    """跑所有 topic 的完整链路，然后推送到 GitHub Pages。"""
     init_db(_DB)
     for topic_name in list_topics():
         try:
@@ -32,6 +72,7 @@ def run_all(tag_batch: int = 50, min_score: int | None = None) -> None:
         except Exception:
             logger.exception("[%s] 链路异常，跳过继续", topic_name)
     logger.info("==== 所有 topic 完成 ====")
+    _push_walls()
 
 
 def main() -> None:
