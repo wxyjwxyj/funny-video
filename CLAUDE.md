@@ -91,19 +91,16 @@ collectors/xiaohongshu.py（CDP，阶段三）       ┘
 
 | 采集器 | 方式 | 关键词/来源 | 条数/次 |
 |--------|------|------------|--------|
-| `collectors/bilibili.py` | 公开热门API | 综合热门 | ~60 |
-| `collectors/douyin.py` | CDP 搜索 | 搞笑/沙雕/鬼畜 | ~28 |
-| `collectors/xiaohongshu.py` | CDP DOM | 搞笑/沙雕 | ~35 |
-| `collectors/bilibili_ai.py` | CDP DOM 搜索 | AI大模型/DeepSeek等9词 | ~150 |
+| `collectors/bilibili.py` | 公开热门API + CDP搜索 | B站两大入口统一文件 |
 
 ## 运行命令
 
 ```bash
-# 搞笑视频（B站+抖音+小红书）
-python run.py --pages 3 --tag-batch 50
+# 搞笑视频墙（B站+抖音+小红书）
+python run_topic.py --topic funny
 
-# AI视频（B站搜索）
-python run_ai.py
+# AI视频墙
+python run_topic.py --topic ai
 
 # 定时调度（每6小时）
 python scripts/scheduler.py --interval 6

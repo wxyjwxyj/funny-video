@@ -1,49 +1,54 @@
-"""所有主题的注册表。新增主题只需在这里添加一条 TopicConfig。"""
+"""所有主题的注册表。新增主题只需在这里添加一条 TopicConfig。
+
+采集器用注册表字符串名引用（base._collector_registry），禁用函数指针。
+只依赖 topics.config，不 import 任何 collectors。"""
+
 from topics.config import CollectorDef, TopicConfig
 
-# ── AI 视频专用关键词 ────────────────────────────────
+# ── 关键词 ──────────────────────────────────────────────────
+_DOUYIN_FUNNY_KW = ["搞笑", "沙雕", "鬼畜"]
+_XHS_FUNNY_KW = ["搞笑", "沙雕"]
+
 _DOUYIN_AI_KW = ["AI大模型", "DeepSeek", "可灵AI", "Claude AI", "人工智能"]
 _XHS_AI_KW = ["AI大模型", "DeepSeek", "可灵AI", "即梦AI"]
 
 
 def _build_topics() -> dict[str, TopicConfig]:
-    # 延迟导入采集器，避免循环依赖和 import 时 CDP 初始化
-    import collectors.bilibili as bili
-    import collectors.bilibili_ai as bili_ai
-    import collectors.douyin as dy
-    import collectors.xiaohongshu as xhs
-
     return {
         "funny": TopicConfig(
             topic="funny",
             display_name="🎬 搞笑视频墙",
             collectors=[
-                CollectorDef(bili.fetch_popular, {"pages": 5}),
-                CollectorDef(dy.fetch_popular, {}, skip_flag="douyin"),
-                CollectorDef(xhs.fetch_popular, {}, skip_flag="xhs"),
+                CollectorDef("bilibili_popular",
+                             {"pages": 5, "categories": "FUNNY_CATEGORIES"},
+                             platform="bilibili"),
+                CollectorDef("douyin_search",
+                             {"keywords": _DOUYIN_FUNNY_KW},
+                             skip_flag="douyin"),
+                CollectorDef("xiaohongshu_search",
+                             {"keywords": _XHS_FUNNY_KW},
+                             skip_flag="xhs"),
             ],
-            tag_prompt="funny",
-            platform_buttons=[
-                ("bilibili", "B站"),
-                ("douyin", "抖音"),
-                ("wechat_video", "视频号"),
-                ("xiaohongshu", "小红书"),
-            ],
+            score_type="funny_score",
+            min_score=7,
         ),
         "ai": TopicConfig(
             topic="ai",
             display_name="🤖 AI 视频墙",
             collectors=[
-                CollectorDef(bili_ai.fetch_ai_videos, {}),
-                CollectorDef(dy.fetch_popular, {"keywords": _DOUYIN_AI_KW, "topic": "ai"}, skip_flag="douyin"),
-                CollectorDef(xhs.fetch_popular, {"keywords": _XHS_AI_KW, "topic": "ai"}, skip_flag="xhs"),
+                CollectorDef("bilibili_search",
+                             {"keywords": _DOUYIN_AI_KW,
+                              "content_hash_prefix": "bilibili_ai"},
+                             platform="bilibili"),
+                CollectorDef("douyin_search",
+                             {"keywords": _DOUYIN_AI_KW},
+                             skip_flag="douyin"),
+                CollectorDef("xiaohongshu_search",
+                             {"keywords": _XHS_AI_KW},
+                             skip_flag="xhs"),
             ],
-            tag_prompt="ai",
-            platform_buttons=[
-                ("bilibili", "B站"),
-                ("douyin", "抖音"),
-                ("xiaohongshu", "小红书"),
-            ],
+            score_type="funny_score",
+            min_score=7,
         ),
     }
 

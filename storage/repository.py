@@ -70,11 +70,12 @@ def list_untagged(limit: int = 50, topic: str | None = None) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-def update_tags(content_hash: str, tags: list[str], funny_score: int) -> None:
-    """回写 Claude 打标结果。"""
+def update_tags(content_hash: str, tags: list[str], funny_score: int, is_unsafe: bool = False) -> None:
+    """回写 Claude 打标结果。is_unsafe=True 时直接将视频标为 inactive，不展示。"""
+    status = "inactive" if is_unsafe else "active"
     with contextlib.closing(get_db()) as conn:
         with conn:
             conn.execute(
-                "UPDATE videos SET tags=?, funny_score=? WHERE content_hash=?",
-                (json.dumps(tags, ensure_ascii=False), funny_score, content_hash),
+                "UPDATE videos SET tags=?, funny_score=?, is_unsafe=?, status=? WHERE content_hash=?",
+                (json.dumps(tags, ensure_ascii=False), funny_score, is_unsafe, status, content_hash),
             )

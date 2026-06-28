@@ -1,54 +1,48 @@
-"""定时调度：每隔指定小时数跑一次完整链路。
+"""定时调度：每隔指定小时数跑一次完整链路（所有 topic）。
 
 用法：
-    python scripts/scheduler.py              # 默认每 24 小时跑一次
-    python scripts/scheduler.py --interval 6 # 每 6 小时跑一次
+    python scripts/scheduler.py              # 默认每 6 小时跑一次
+    python scripts/scheduler.py --interval 24
     python scripts/scheduler.py --once       # 跑一次后退出（调试用）
+
+scheduler 是薄层，核心逻辑复用 run_topic.run_pipeline()。
 """
 import argparse
 import sys
 import time
 from pathlib import Path
 
-# 确保项目根目录在 path 里
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from collectors.bilibili import fetch_popular
-from pipeline import dedup, tagging
-from publishers.generate_wall import generate
+from run_topic import run_pipeline
 from storage.db import init_db
+from topics.registry import list_topics
 from utils.log import get_logger
 
 logger = get_logger(__name__)
 _DB = Path(__file__).parent.parent / "video.db"
 
 
-def run_pipeline(pages: int = 5, tag_batch: int = 30, min_score: int = 5) -> None:
-    """跑一次完整链路：采集 → 去重 → 打标签 → 生成视频墙。"""
-    logger.info("==== 开始调度任务 ====")
+def run_all(tag_batch: int = 50, min_score: int | None = None) -> None:
+    """跑所有 topic 的完整链路。"""
     init_db(_DB)
-
-    videos = fetch_popular(pages=pages)
-    counts = dedup.run(videos)
-    logger.info("去重结果: %s", counts)
-
-    tagged = tagging.run(batch_size=tag_batch)
-    logger.info("本次打标签: %d 条", tagged)
-
-    out = generate(min_score=min_score)
-    logger.info("==== 调度任务完成，视频墙: %s ====", out)
+    for topic_name in list_topics():
+        try:
+            run_pipeline(topic_name, tag_batch=tag_batch, min_score=min_score)
+        except Exception:
+            logger.exception("[%s] 链路异常，跳过继续", topic_name)
+    logger.info("==== 所有 topic 完成 ====")
 
 
 def main() -> None:
     p = argparse.ArgumentParser()
-    p.add_argument("--interval", type=float, default=24, help="间隔小时数（默认 24）")
-    p.add_argument("--pages", type=int, default=5)
-    p.add_argument("--tag-batch", type=int, default=30)
-    p.add_argument("--min-score", type=int, default=5)
+    p.add_argument("--interval", type=float, default=6, help="间隔小时数（默认 6）")
+    p.add_argument("--tag-batch", type=int, default=50)
+    p.add_argument("--min-score", type=int, default=None, help="覆盖 TopicConfig.min_score")
     p.add_argument("--once", action="store_true", help="只跑一次后退出")
     args = p.parse_args()
 
-    run_pipeline(pages=args.pages, tag_batch=args.tag_batch, min_score=args.min_score)
+    run_all(tag_batch=args.tag_batch, min_score=args.min_score)
 
     if args.once:
         return
@@ -57,7 +51,7 @@ def main() -> None:
     while True:
         logger.info("下次运行在 %.1f 小时后", args.interval)
         time.sleep(interval_sec)
-        run_pipeline(pages=args.pages, tag_batch=args.tag_batch, min_score=args.min_score)
+        run_all(tag_batch=args.tag_batch, min_score=args.min_score)
 
 
 if __name__ == "__main__":

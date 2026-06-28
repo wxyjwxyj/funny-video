@@ -1,23 +1,23 @@
-"""Topic 配置数据类。"""
+"""Topic 配置数据类。纯数据，无运行时导入。"""
+
 from dataclasses import dataclass, field
-from typing import Callable
 
 
 @dataclass
 class CollectorDef:
-    """单个采集器描述。"""
-    fn: Callable
+    """单个采集器描述。name 是 base.register 的字符串名，kwargs 传给构造函数。"""
+    name: str                               # 采集器名（"bilibili_popular" / "douyin_search" ...）
     kwargs: dict = field(default_factory=dict)
-    skip_flag: str = ""     # CLI --skip-xxx 对应的 flag（如 "douyin"）
-    optional: bool = True   # True=失败降级，False=必须成功
+    skip_flag: str = ""                     # CLI --skip-xxx 对应的 flag
+    optional: bool = True                   # True=失败降级
+    platform: str = ""                      # 平台名（bilibili/douyin/xiaohongshu，供前端用）
 
 
 @dataclass
 class TopicConfig:
-    """一个内容主题的完整配置。"""
-    topic: str                              # DB topic 值（funny/ai/...）
+    """一个内容主题的完整配置。采集/标签/生成全链路由这一个配置驱动。"""
+    topic: str                              # DB topic 值
     display_name: str                       # 视频墙标题（含 emoji）
     collectors: list[CollectorDef]          # 采集器列表，按顺序执行
-    tag_prompt: str                         # 传给 tagging.run 的 prompt key
-    platform_buttons: list[tuple[str, str]] # [("bilibili","B站"), ...]
-    min_score: int = 5
+    score_type: str = "funny_score"         # DB 评分字段名（funny_score 或 quality_score）
+    min_score: int = 7                      # 最低上墙分数

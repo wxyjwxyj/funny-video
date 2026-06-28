@@ -21,7 +21,8 @@ CREATE TABLE IF NOT EXISTS videos (
     funny_score       INTEGER,              -- 0-10，Claude 评分
     extra             TEXT,                 -- JSON，平台特有字段（投币/收藏等）
     content_hash      TEXT UNIQUE,          -- 去重键（冲突键，不用 page_url）
-    status            TEXT DEFAULT 'active',-- active / hidden
+    status            TEXT DEFAULT 'active',-- active / hidden / inactive
+    is_unsafe         INTEGER DEFAULT 0,     -- Claude 判定的不安全内容标记
     is_liked          INTEGER DEFAULT 0,    -- 个人标记：喜欢
     is_watched        INTEGER DEFAULT 0,    -- 个人标记：已看
     fetched_at        TEXT,

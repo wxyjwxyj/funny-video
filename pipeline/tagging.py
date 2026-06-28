@@ -31,15 +31,24 @@ _INPUT_SCHEMA = {
             "description": (
                 "Humor score 0-10. "
                 "0=not funny at all, 5=moderately funny, 10=extremely hilarious. "
+                "Score 0 if content is gore, bloody, horror, sexually suggestive, "
+                "vulgar, or otherwise unsafe/NSFW. "
                 "Base on title, category, and play/like ratio."
             ),
         },
         "reason": {
             "type": "string",
-            "description": "One sentence explaining the score (Chinese ok).",
+            "description": "One sentence explaining the score (Chinese ok). If score=0 due to unsafe content, explain why.",
+        },
+        "is_unsafe": {
+            "type": "boolean",
+            "description": (
+                "True if content appears to contain gore, extreme violence/blood, "
+                "horror, sexually suggestive, vulgar/lowbrow, or NSFW material."
+            ),
         },
     },
-    "required": ["tags", "funny_score", "reason"],
+    "required": ["tags", "funny_score", "reason", "is_unsafe"],
 }
 
 
@@ -54,7 +63,12 @@ def _build_prompt(video: dict) -> str:
         f"Play count: {play:,}  Like count: {like:,}  "
         f"Like ratio: {like/play:.2%}\n\n"
         "Rate how funny/entertaining this video likely is based on the metadata above. "
-        "Focus on whether it belongs to humor, parody, meme, or entertainment genres."
+        "Focus on whether it belongs to humor, parody, meme, or entertainment genres.\n"
+        "IMPORTANT: First check for unsafe content. If the title or category suggests "
+        "gore, extreme violence, blood, horror, sexually suggestive material, vulgar jokes, "
+        "or NSFW content, set is_unsafe=true AND funny_score=0. "
+        "Safe comedy is about wit, absurdity, parody, and lighthearted entertainment — "
+        "not shock value or crude content."
     )
 
 
@@ -99,8 +113,8 @@ def run(batch_size: int = 20, workers: int = 5, topic: str = "funny", tag_prompt
                 tool_description=_TOOL_DESC,
                 input_schema=_INPUT_SCHEMA,
             )
-            repository.update_tags(v["content_hash"], result.get("tags", []), result.get("funny_score", 0))
-            logger.info("tagging: %s → score=%d tags=%s", v["title"][:30], result.get("funny_score", 0), result.get("tags", []))
+            repository.update_tags(v["content_hash"], result.get("tags", []), result.get("funny_score", 0), result.get("is_unsafe", False))
+            logger.info("tagging: %s → score=%d unsafe=%s tags=%s", v["title"][:30], result.get("funny_score", 0), result.get("is_unsafe", False), result.get("tags", []))
             return True
         except Exception as e:
             logger.warning("tagging: %s 失败: %s", v.get("content_hash"), e)

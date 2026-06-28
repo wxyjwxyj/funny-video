@@ -119,9 +119,8 @@ def _render_card(v: dict) -> str:
     )
 
 
-def generate(min_score: int = 0, output: Path | None = None,
-             date: str | None = None, topic: str = "funny",
-             platform_buttons: list[tuple[str, str]] | None = None) -> Path:
+def generate(topic: str = "funny", min_score: int = 7, output: Path | None = None,
+             date: str | None = None, display_name: str | None = None) -> Path:
     """生成视频墙 HTML 文件。
 
     Args:
@@ -174,14 +173,14 @@ def generate(min_score: int = 0, output: Path | None = None,
 
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
-    # 标题和平台按钮：优先使用外部传入，否则按 topic 默认
-    _defaults = {
-        "funny": ("🎬 搞笑视频墙", [("bilibili","B站"),("douyin","抖音"),("wechat_video","视频号"),("xiaohongshu","小红书")]),
-        "ai":    ("🤖 AI 视频墙",  [("bilibili","B站"),("douyin","抖音"),("xiaohongshu","小红书")]),
-    }
-    default_title, default_btns = _defaults.get(topic, ("🎬 搞笑视频墙", []))
-    page_title = default_title
-    pb_list = platform_buttons if platform_buttons is not None else default_btns
+    # 标题和平台按钮：有外部传入用外部，否则从 topic 推导
+    if display_name:
+        page_title = display_name
+    else:
+        page_title = {"funny": "🎬 搞笑视频墙", "ai": "🤖 AI 视频墙"}.get(topic, "🎬 视频墙")
+
+    # 平台切换按钮：页面内置默认值
+    pb_list = [("bilibili", "B站"), ("douyin", "抖音"), ("wechat_video", "视频号"), ("xiaohongshu", "小红书")]
     pb_html = "".join(f'<button data-platform="{k}">{v}</button>' for k, v in pb_list)
 
     html = (
