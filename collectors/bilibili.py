@@ -112,8 +112,8 @@ class BilibiliSearchCollector(CDPCollector):
     """B站搜索 CDP 采集器。keywords + 最新排序。"""
 
     domain_pattern = "bilibili.com"
-    default_keywords = ["AI大模型", "DeepSeek", "Kimi AI", "Claude AI",
-                        "可灵AI", "Vidu AI", "即梦AI", "人工智能教程", "大模型应用"]
+    default_keywords = ["DeepSeek", "Kimi", "通义千问", "ChatGPT", "Claude", "Gemini",
+                        "AI Agent", "AI工具", "AI视频", "AI绘画", "大模型"]
     per_keyword = 5
     request_delay = 1.5
     page_wait = 3.0
