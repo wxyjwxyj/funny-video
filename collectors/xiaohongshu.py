@@ -16,7 +16,7 @@ class XiaohongshuCollector(CDPCollector):
 
     domain_pattern = "xiaohongshu.com"
     default_keywords = ["搞笑", "沙雕"]
-    per_keyword = 5
+    per_keyword = 10
     request_delay = 2.0
     page_wait = 3.0
     content_hash_prefix = "xiaohongshu"
