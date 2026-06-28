@@ -17,7 +17,7 @@ class DouyinCollector(CDPCollector):
 
     domain_pattern = "douyin.com"
     default_keywords = ["搞笑", "沙雕", "鬼畜"]
-    per_keyword = 10
+    per_keyword = 5
     request_delay = 2.0
     page_wait = 0
     content_hash_prefix = "douyin"
