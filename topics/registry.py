@@ -7,8 +7,8 @@ from collectors.bilibili import FUNNY_CATEGORIES
 from topics.config import CollectorDef, TopicConfig
 
 # ── 关键词 ──────────────────────────────────────────────────
-_DOUYIN_FUNNY_KW = ["搞笑配音", "沙雕动画", "整活"]
-_XHS_FUNNY_KW = ["整活", "搞笑合集"]
+_DOUYIN_FUNNY_KW = ["搞笑配音", "沙雕动画", "整活", "整蛊", "脱口秀"]
+_XHS_FUNNY_KW = ["整活", "搞笑合集", "搞笑日常", "沙雕"]
 
 _AI_KW = ["DeepSeek", "Kimi", "通义千问", "ChatGPT", "Claude", "Gemini", "AI Agent",
           "AI工具", "AI视频", "AI绘画", "大模型"]
