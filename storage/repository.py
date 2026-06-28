@@ -56,15 +56,17 @@ def upsert_videos(videos: list[dict]) -> dict[str, int]:
     return counts
 
 
-def list_untagged(limit: int = 50, topic: str | None = None) -> list[dict]:
-    """返回 funny_score 为 NULL 的视频，用于打标签流水线。"""
+def list_untagged(limit: int | None = 50, topic: str | None = None) -> list[dict]:
+    """返回 funny_score 为 NULL 的视频，用于打标签流水线。limit=None 表示全部。"""
     sql = "SELECT * FROM videos WHERE funny_score IS NULL AND status='active'"
     params: list = []
     if topic:
         sql += " AND topic=?"
         params.append(topic)
-    sql += " ORDER BY RANDOM() LIMIT ?"
-    params.append(limit)
+    sql += " ORDER BY RANDOM()"
+    if limit is not None:
+        sql += " LIMIT ?"
+        params.append(limit)
     with contextlib.closing(get_db()) as conn:
         rows = conn.execute(sql, params).fetchall()
     return [dict(r) for r in rows]

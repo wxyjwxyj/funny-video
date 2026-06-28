@@ -20,7 +20,7 @@ logger = get_logger(__name__)
 _DB = Path(__file__).parent / "video.db"
 
 
-def run_pipeline(topic_name: str, *, tag_batch: int = 50,
+def run_pipeline(topic_name: str, *, tag_batch: int | None = None,
                  skip_collect: bool = False, skip_tag: bool = False,
                  skip_flags: set[str] | None = None,
                  min_score: int | None = None) -> str | None:

@@ -66,7 +66,7 @@ def _push_walls() -> None:
     logger.info("GitHub Pages 推送完成")
 
 
-def run_all(tag_batch: int = 50, min_score: int | None = None) -> None:
+def run_all(tag_batch: int | None = None, min_score: int | None = None) -> None:
     """跑所有 topic 的完整链路，然后推送到 GitHub Pages。"""
     init_db(_DB)
     for topic_name in list_topics():

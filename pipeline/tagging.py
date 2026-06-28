@@ -96,8 +96,8 @@ _PROMPT_FNS = {
 }
 
 
-def run(batch_size: int = 20, workers: int = 5, topic: str = "funny", tag_prompt: str | None = None) -> int:
-    """并发给一批未打标签的视频评分，返回处理条数。"""
+def run(batch_size: int | None = None, workers: int = 5, topic: str = "funny", tag_prompt: str | None = None) -> int:
+    """并发给未打标签的视频评分，返回处理条数。batch_size=None 表示全部处理。"""
     videos = repository.list_untagged(limit=batch_size, topic=topic)
     if not videos:
         logger.info("tagging: 无待处理视频 (topic=%s)", topic)
