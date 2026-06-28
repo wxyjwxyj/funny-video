@@ -49,7 +49,7 @@ def _build_topics() -> dict[str, TopicConfig]:
                              skip_flag="xhs"),
             ],
             score_type="funny_score",
-            min_score=0,
+            min_score=7,
         ),
     }
 
