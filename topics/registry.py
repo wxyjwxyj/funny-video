@@ -15,7 +15,7 @@ _AI_KW_BILIBILI = ["DeepSeek", "Kimi", "通义千问", "ChatGPT", "Claude", "Gem
 # 抖音关键词原则：具体产品名，避免宽泛词和字节系产品
 #   噪音大：ChatGPT/Gemini/豆包 → 引流标签乱挂
 #   精准：DeepSeek/Claude/通义千问/可灵AI → 语义单一
-_AI_KW_DOUYIN = ["DeepSeek", "通义千问", "Kimi AI", "Claude", "AI Agent", "可灵AI"]
+_AI_KW_DOUYIN = ["Claude", "AI Agent", "可灵AI"]
 _XHS_AI_KW = ["可灵AI", "即梦AI", "AI绘画", "DeepSeek", "Claude", "ChatGPT", "Kimi"]
 
 
