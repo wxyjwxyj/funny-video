@@ -1,0 +1,10 @@
+# 调度配置 — 修改时间无需改 plist
+runs:
+  - time: "06:00"
+    steps: [collect, tag, generate, push]
+  - time: "12:00"
+    steps: [collect, tag, generate, push]
+  - time: "18:00"
+    steps: [collect, tag, generate, push]
+  - time: "00:00"
+    steps: [collect, tag, generate, push]
