@@ -44,10 +44,7 @@ def _push_walls() -> None:
     """将新生成的 wall 文件 commit 并 push 到 GitHub Pages。"""
     changed = _get_changed_files()
     # 只关心 wall/archive 相关文件
-    targets = [f for f in changed if any(
-        f.startswith(p.replace("/", "")) or p.replace("/", "") in f
-        for p in _EXPECTED_FILES
-    )]
+    targets = [f for f in changed if any(f == p or f.startswith(p) for p in _EXPECTED_FILES)]
     if not targets:
         logger.info("无视频墙文件变更，跳过推送")
         return

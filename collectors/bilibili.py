@@ -56,7 +56,7 @@ class BilibiliPopularCollector(BaseCollector):
                 continue
 
             if data.get("code") != 0:
-                logger.warning("B站热门第 %d 页 API 报错: %s", pn, data.get("code"), data.get("message"))
+                logger.warning("B站热门第 %d 页 API 报错: code=%s msg=%s", pn, data.get("code"), data.get("message"))
                 continue
 
             items = data.get("data", {}).get("list", [])

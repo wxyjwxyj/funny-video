@@ -6,7 +6,12 @@ import pytest
 from storage.db import init_db, get_connection
 from storage import repository
 from pipeline import dedup
-from collectors.bilibili import _map_video, fetch_popular
+from collectors.bilibili import BilibiliPopularCollector, fetch_popular
+
+_collector = BilibiliPopularCollector(topic="funny")
+
+def _map_video(item: dict):
+    return _collector._map(item)
 
 
 # ── _map_video 单元测试 ────────────────────────────────────────────────────

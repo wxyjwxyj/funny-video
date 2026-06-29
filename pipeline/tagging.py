@@ -13,8 +13,9 @@ logger = get_logger(__name__)
 
 _TOOL_NAME = "tag_video"
 _TOOL_DESC = (
-    "Analyze a short video's metadata and return content tags "
-    "plus a humor score indicating how funny/entertaining it likely is."
+    "Analyze a short video's metadata and return content tags plus "
+    "a score (0-10). For funny content the score reflects humor; "
+    "for AI content it reflects quality and relevance."
 )
 _INPUT_SCHEMA = {
     "type": "object",
@@ -29,16 +30,15 @@ _INPUT_SCHEMA = {
             "minimum": 0,
             "maximum": 10,
             "description": (
-                "Humor score 0-10. "
-                "0=not funny at all, 5=moderately funny, 10=extremely hilarious. "
-                "Score 0 if content is gore, bloody, horror, sexually suggestive, "
-                "vulgar, or otherwise unsafe/NSFW. "
-                "Base on title, category, and play/like ratio."
+                "Score 0-10. Interpretation depends on the task: "
+                "for humor detection, 0=not funny, 10=hilarious; "
+                "for AI/tech quality, 0=clickbait/irrelevant, 10=must-watch. "
+                "Always score 0 for gore, horror, sexually suggestive, vulgar, or NSFW content."
             ),
         },
         "reason": {
             "type": "string",
-            "description": "One sentence explaining the score (Chinese ok). If score=0 due to unsafe content, explain why.",
+            "description": "One sentence explaining the score (Chinese ok). If score=0, explain why.",
         },
         "is_unsafe": {
             "type": "boolean",

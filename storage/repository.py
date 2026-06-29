@@ -38,8 +38,7 @@ def upsert_video(video: dict) -> str:
     """
 
     with contextlib.closing(get_db()) as conn:
-        with conn:
-            # 先查存在性，再 upsert——单写场景下无并发问题，逻辑最清晰
+        with conn:  # 同一事务内 SELECT + INSERT，SQLite 写锁保证原子性
             exists = conn.execute(
                 "SELECT 1 FROM videos WHERE content_hash=?", (row["content_hash"],)
             ).fetchone()

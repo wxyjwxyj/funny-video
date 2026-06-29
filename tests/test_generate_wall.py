@@ -32,7 +32,7 @@ def seeded_db(tmp_path, monkeypatch):
             "play_url": None, "duration": 60, "play_count": 50000, "like_count": 3000,
             "category": cat, "tags": json.dumps(["搞笑", cat]), "funny_score": score,
             "extra": {}, "content_hash": f"bilibili:{bvid}",
-            "status": "active", "fetched_at": now, "created_at": now,
+            "status": "active", "topic": "funny", "fetched_at": now, "created_at": now,
         })
     return dbfile
 

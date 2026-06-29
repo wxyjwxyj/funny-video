@@ -153,8 +153,8 @@ def generate(topic: str = "funny", min_score: int = 7, min_like_count: int = 0,
     if min_like_count > 0:
         sql += " AND like_count >= ?"
         params.append(min_like_count)
-    sql += " AND date(created_at) = ? AND date(fetched_at) = ?"
-    params.extend([date_str, date_str])
+    sql += " AND date(fetched_at) = ?"
+    params.append(date_str)
 
     with contextlib.closing(get_connection(_DB_PATH)) as conn:
         rows = conn.execute(
