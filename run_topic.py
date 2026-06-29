@@ -64,7 +64,8 @@ def run_pipeline(topic_name: str, *, tag_batch: int | None = None,
 def main() -> None:
     p = argparse.ArgumentParser(description="视频聚合墙通用流水线")
     p.add_argument("--topic", default="funny", help=f"主题，可选: {list_topics()}")
-    p.add_argument("--tag-batch", type=int, default=50)
+    p.add_argument("--tag-batch", type=int, default=None,
+                   help="打标签条数上限，不填则处理全部未打标签的")
     p.add_argument("--min-score", type=int, default=None)
     p.add_argument("--skip-collect", action="store_true")
     p.add_argument("--skip-tag", action="store_true")

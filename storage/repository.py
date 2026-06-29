@@ -63,7 +63,7 @@ def list_untagged(limit: int | None = 50, topic: str | None = None) -> list[dict
     if topic:
         sql += " AND topic=?"
         params.append(topic)
-    sql += " ORDER BY RANDOM()"
+    sql += " ORDER BY created_at DESC"
     if limit is not None:
         sql += " LIMIT ?"
         params.append(limit)
