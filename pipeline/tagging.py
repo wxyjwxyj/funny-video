@@ -83,10 +83,10 @@ def _build_ai_prompt(video: dict) -> str:
         f"Duration: {video.get('duration', 0)}s\n"
         f"Play count: {play:,}  Like count: {like:,}  "
         f"Like ratio: {like/play:.2%}\n\n"
-        "Rate the quality and relevance of this AI/tech video. "
-        "Use the funny_score field as a quality score (0-10): "
-        "0=irrelevant or low quality, 5=decent AI/tech content, 10=must-watch insight or tutorial. "
-        "Focus on whether it provides genuine AI knowledge, news, tools, or analysis."
+        "Rate the quality and relevance of this AI/tech video (0-10): "
+        "0=irrelevant/low-quality/clickbait, 5=decent AI/tech content, 10=must-watch insight or tutorial. "
+        "Focus on whether it provides genuine AI knowledge, news, tools, or analysis. "
+        "Score 0 if the title is clickbait, misleading, or the AI keyword is merely a hashtag rather than the main topic."
     )
 
 

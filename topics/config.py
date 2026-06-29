@@ -19,6 +19,6 @@ class TopicConfig:
     topic: str                              # DB topic 值
     display_name: str                       # 视频墙标题（含 emoji）
     collectors: list[CollectorDef]          # 采集器列表，按顺序执行
-    score_type: str = "funny_score"         # DB 评分字段名（funny_score 或 quality_score）
+    score_type: str = "funny_score"         # 已废弃，由 tag_prompt=config.topic 替代。保留仅为向后兼容
     min_score: int = 7                      # 最低上墙分数
     min_like_count: int = 0                 # 最低点赞数（0=不限）；play_count 抖音/小红书不可用
