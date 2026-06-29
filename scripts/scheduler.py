@@ -66,12 +66,18 @@ def _push_walls() -> None:
     logger.info("GitHub Pages 推送完成")
 
 
-def run_all(tag_batch: int | None = None, min_score: int | None = None) -> None:
-    """跑所有 topic 的完整链路，然后推送到 GitHub Pages。"""
+def run_all(tag_batch: int | None = None, min_score: int | None = None,
+            skip_collect: bool = False, skip_tag: bool = False) -> None:
+    """跑所有 topic 的完整链路，然后推送到 GitHub Pages。
+
+    skip_collect=True 时只重新生成视频墙并推送（调完 min_score/关键词后用），
+    不重新采集，避免触发平台人机验证。
+    """
     init_db(_DB)
     for topic_name in list_topics():
         try:
-            run_pipeline(topic_name, tag_batch=tag_batch, min_score=min_score)
+            run_pipeline(topic_name, tag_batch=tag_batch, min_score=min_score,
+                         skip_collect=skip_collect, skip_tag=skip_tag)
         except Exception:
             logger.exception("[%s] 链路异常，跳过继续", topic_name)
     logger.info("==== 所有 topic 完成 ====")
@@ -81,12 +87,17 @@ def run_all(tag_batch: int | None = None, min_score: int | None = None) -> None:
 def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--interval", type=float, default=6, help="间隔小时数（默认 6）")
-    p.add_argument("--tag-batch", type=int, default=50)
+    p.add_argument("--tag-batch", type=int, default=None,
+                   help="打标签条数上限，不填则处理全部未打标签的")
     p.add_argument("--min-score", type=int, default=None, help="覆盖 TopicConfig.min_score")
     p.add_argument("--once", action="store_true", help="只跑一次后退出")
+    p.add_argument("--no-collect", action="store_true",
+                   help="跳过采集，只重新生成视频墙并推送（调参数后用）")
+    p.add_argument("--no-tag", action="store_true", help="跳过打标签")
     args = p.parse_args()
 
-    run_all(tag_batch=args.tag_batch, min_score=args.min_score)
+    run_all(tag_batch=args.tag_batch, min_score=args.min_score,
+            skip_collect=args.no_collect, skip_tag=args.no_tag)
 
     if args.once:
         return
@@ -95,7 +106,8 @@ def main() -> None:
     while True:
         logger.info("下次运行在 %.1f 小时后", args.interval)
         time.sleep(interval_sec)
-        run_all(tag_batch=args.tag_batch, min_score=args.min_score)
+        run_all(tag_batch=args.tag_batch, min_score=args.min_score,
+                skip_collect=args.no_collect, skip_tag=args.no_tag)
 
 
 if __name__ == "__main__":
