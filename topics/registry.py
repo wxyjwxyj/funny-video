@@ -12,11 +12,10 @@ _XHS_FUNNY_KW = ["整活", "搞笑合集", "搞笑日常", "沙雕"]
 
 _AI_KW_BILIBILI = ["DeepSeek", "Kimi", "通义千问", "ChatGPT", "Claude", "Gemini", "AI Agent",
                    "AI工具", "AI视频", "AI绘画", "大模型"]
-# 抖音关键词原则：具体产品名，避免宽泛词和字节系产品
-#   噪音大：ChatGPT/Gemini/豆包 → 引流标签乱挂
-#   精准：DeepSeek/Claude/通义千问/可灵AI → 语义单一
+# 抖音关键词：只用高赞产品名，避免宽泛词和字节系产品
+#   ChatGPT/Gemini/豆包 → 引流标签乱挂 → 删；DeepSeek/通义千问 → 抖音0高赞 → 删
 _AI_KW_DOUYIN = ["Claude", "AI Agent", "可灵AI"]
-_XHS_AI_KW = ["可灵AI", "即梦AI", "AI绘画", "DeepSeek", "Claude", "ChatGPT", "Kimi"]
+_XHS_AI_KW = ["Claude", "即梦AI", "AI绘画", "DeepSeek", "可灵AI", "ChatGPT"]
 
 
 def _build_topics() -> dict[str, TopicConfig]:

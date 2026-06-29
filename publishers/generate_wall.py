@@ -126,7 +126,12 @@ def generate(topic: str = "funny", min_score: int = 7, min_like_count: int = 0,
     """生成视频墙 HTML 文件。
 
     Args:
-        platform_buttons: [(platform_key, label), ...] 覆盖默认按钮
+        topic: 内容主题（对应 DB videos.topic 字段）
+        min_score: 最低上墙 funny_score
+        min_like_count: 最低点赞数（0=不限）
+        output: 自定义输出路径，不传则按 topic 自动命名
+        date: 筛选日期（YYYY-MM-DD），默认今天
+        display_name: 页面标题，不传则从 topic 推导
     """
     init_db(_DB_PATH)
 
