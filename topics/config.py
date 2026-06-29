@@ -21,3 +21,4 @@ class TopicConfig:
     collectors: list[CollectorDef]          # 采集器列表，按顺序执行
     score_type: str = "funny_score"         # DB 评分字段名（funny_score 或 quality_score）
     min_score: int = 7                      # 最低上墙分数
+    min_like_count: int = 0                 # 最低点赞数（0=不限）；play_count 抖音/小红书不可用

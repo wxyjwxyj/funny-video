@@ -120,7 +120,8 @@ def _render_card(v: dict) -> str:
     )
 
 
-def generate(topic: str = "funny", min_score: int = 7, output: Path | None = None,
+def generate(topic: str = "funny", min_score: int = 7, min_like_count: int = 0,
+             output: Path | None = None,
              date: str | None = None, display_name: str | None = None) -> Path:
     """生成视频墙 HTML 文件。
 
@@ -144,6 +145,9 @@ def generate(topic: str = "funny", min_score: int = 7, output: Path | None = Non
 
     sql = "SELECT * FROM videos WHERE funny_score >= ? AND status='active' AND topic=?"
     params: list = [min_score, topic]
+    if min_like_count > 0:
+        sql += " AND like_count >= ?"
+        params.append(min_like_count)
     sql += " AND date(created_at) = ? AND date(fetched_at) = ?"
     params.extend([date_str, date_str])
 

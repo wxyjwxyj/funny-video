@@ -56,7 +56,7 @@ def run_pipeline(topic_name: str, *, tag_batch: int | None = None,
         logger.info("[%s] 打标签: %d 条", topic_name, tagged)
 
     # ── 生成 ──
-    out = generate(topic=config.topic, min_score=min_score, display_name=config.display_name)
+    out = generate(topic=config.topic, min_score=min_score, min_like_count=config.min_like_count, display_name=config.display_name)
     logger.info("[%s] 完成，视频墙: %s", topic_name, out)
     return out
 

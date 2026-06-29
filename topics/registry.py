@@ -10,9 +10,13 @@ from topics.config import CollectorDef, TopicConfig
 _DOUYIN_FUNNY_KW = ["搞笑配音", "沙雕动画", "整活", "整蛊", "脱口秀"]
 _XHS_FUNNY_KW = ["整活", "搞笑合集", "搞笑日常", "沙雕"]
 
-_AI_KW = ["DeepSeek", "Kimi", "通义千问", "ChatGPT", "Claude", "Gemini", "AI Agent",
-          "AI工具", "AI视频", "AI绘画", "大模型"]
-_XHS_AI_KW = ["可灵AI", "即梦AI", "AI绘画", "Midjourney", "Suno", "DeepSeek"]
+_AI_KW_BILIBILI = ["DeepSeek", "Kimi", "通义千问", "ChatGPT", "Claude", "Gemini", "AI Agent",
+                   "AI工具", "AI视频", "AI绘画", "大模型"]
+# 抖音关键词原则：具体产品名，避免宽泛词和字节系产品
+#   噪音大：ChatGPT/Gemini/豆包 → 引流标签乱挂
+#   精准：DeepSeek/Claude/通义千问/可灵AI → 语义单一
+_AI_KW_DOUYIN = ["DeepSeek", "通义千问", "Kimi AI", "Claude", "AI Agent", "可灵AI"]
+_XHS_AI_KW = ["可灵AI", "即梦AI", "AI绘画", "DeepSeek", "Claude", "ChatGPT", "Kimi"]
 
 
 def _build_topics() -> dict[str, TopicConfig]:
@@ -33,17 +37,18 @@ def _build_topics() -> dict[str, TopicConfig]:
             ],
             score_type="funny_score",
             min_score=7,
+            min_like_count=5000,
         ),
         "ai": TopicConfig(
             topic="ai",
             display_name="🤖 AI 视频墙",
             collectors=[
                 CollectorDef("bilibili_search",
-                             {"keywords": _AI_KW,
+                             {"keywords": _AI_KW_BILIBILI,
                               "content_hash_prefix": "bilibili_ai"},
                              platform="bilibili"),
                 CollectorDef("douyin_search",
-                             {"keywords": _AI_KW},
+                             {"keywords": _AI_KW_DOUYIN},
                              skip_flag="douyin"),
                 CollectorDef("xiaohongshu_search",
                              {"keywords": _XHS_AI_KW},
@@ -51,6 +56,7 @@ def _build_topics() -> dict[str, TopicConfig]:
             ],
             score_type="funny_score",
             min_score=5,
+            min_like_count=1000,
         ),
     }
 
