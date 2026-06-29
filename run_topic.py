@@ -52,7 +52,7 @@ def run_pipeline(topic_name: str, *, tag_batch: int | None = None,
 
     # ── 打标签 ──
     if not skip_tag:
-        tagged = tagging.run(batch_size=tag_batch, topic=config.topic, tag_prompt=config.score_type)
+        tagged = tagging.run(batch_size=tag_batch, topic=config.topic, tag_prompt=config.topic)
         logger.info("[%s] 打标签: %d 条", topic_name, tagged)
 
     # ── 生成 ──
