@@ -32,6 +32,11 @@ def _load_dotenv() -> None:
             continue
         key, _, value = line.partition("=")
         key = key.strip()
+        value = value.strip()
+        # 去除行内注释（仅对无引号的值，避免误截 URL 中的 #）
+        if not (value.startswith('"') or value.startswith("'")):
+            if ' #' in value:
+                value = value[:value.index(' #')]
         value = value.strip().strip('"').strip("'")
         if key:
             os.environ.setdefault(key, value)

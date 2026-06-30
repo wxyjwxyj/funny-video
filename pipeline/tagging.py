@@ -7,7 +7,7 @@ import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from storage import repository
-from utils.claude import claude_call, extract_json
+from utils.claude import claude_call_tool
 from utils.log import get_logger
 
 logger = get_logger(__name__)
@@ -41,26 +41,48 @@ def _build_prompt(videos: list[dict], topic: str) -> str:
 
     return (
         f"Rate each video's {score_desc}.\n"
-        f"Also assign 3-5 Chinese content tags per video.\n"
-        f"Return ONLY valid JSON, no other text:\n"
-        f'{{\"results\": [{{\"id\": 1, \"score\": 7, \"tags\": [\"标签A\"], \"is_unsafe\": false}}, ...]}}\n\n'
+        f"Also assign 3-5 Chinese content tags per video.\n\n"
         f"Videos:\n" + "\n".join(lines)
     )
 
 
-def _call_batch(videos: list[dict], topic: str) -> list[dict]:
-    """调用 Claude 为一批视频评分，返回与 videos 等长的结果列表。"""
-    raw = claude_call(_build_prompt(videos, topic), max_tokens=2048)
-    data = extract_json(raw)
-    results = data.get("results", [])
+_RATE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "results": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "id":        {"type": "integer"},
+                    "score":     {"type": "integer"},
+                    "tags":      {"type": "array", "items": {"type": "string"}},
+                    "is_unsafe": {"type": "boolean"},
+                },
+                "required": ["id", "score", "tags", "is_unsafe"],
+            },
+        }
+    },
+    "required": ["results"],
+}
 
-    output = [{"score": 5, "tags": [], "is_unsafe": False} for _ in videos]
-    for r in results:
+
+def _call_batch(videos: list[dict], topic: str) -> list[dict | None]:
+    """调用 Claude 为一批视频评分，返回与 videos 等长的列表（None = 未收到结果，保持 DB NULL 待重试）。"""
+    data = claude_call_tool(
+        _build_prompt(videos, topic),
+        tool_name="rate_videos",
+        tool_description="Rate each video and return scores, tags, and safety flags",
+        input_schema=_RATE_SCHEMA,
+        max_tokens=2048,
+    )
+    output: list[dict | None] = [None] * len(videos)
+    for r in data.get("results", []):
         idx = r.get("id", 0) - 1
         if 0 <= idx < len(videos):
             output[idx] = {
-                "score": int(r.get("score", 5)),
-                "tags": r.get("tags", [])[:5],
+                "score":     int(r.get("score", 5)),
+                "tags":      r.get("tags", [])[:5],
                 "is_unsafe": bool(r.get("is_unsafe", False)),
             }
     return output
@@ -85,6 +107,9 @@ def run(batch_size: int | None = None, workers: int = 4, topic: str = "funny", t
             try:
                 results = future.result()
                 for v, r in zip(batch, results):
+                    if r is None:
+                        logger.warning("tagging: %s 未收到评分，跳过（下次重试）", v["title"][:35])
+                        continue
                     repository.update_tags(
                         v["content_hash"], r["tags"], r["score"], r["is_unsafe"]
                     )

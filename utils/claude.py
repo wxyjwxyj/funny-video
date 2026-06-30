@@ -157,7 +157,7 @@ def claude_call(
             last_err = e
             break
 
-    raise last_err
+    raise last_err if last_err else RuntimeError("claude_call: 未拿到响应")  # pragma: no cover
 
 
 def claude_call_tool(
