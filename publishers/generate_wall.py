@@ -183,7 +183,7 @@ def generate(topic: str = "funny", min_score: int = 7, min_like_count: int = 0,
         if cnt >= 2
     )
 
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     # 标题：有外部传入用外部，否则从 topic 推导（display_name 在 registry 已定义）
     page_title = display_name or f"🎬 {topic} 视频墙"
