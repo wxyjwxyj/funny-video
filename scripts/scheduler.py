@@ -99,6 +99,7 @@ def _preflight_check() -> bool:
         _notify("搞笑视频墙 ❌", f"本次跳过: {' | '.join(issues)}")
         return False
 
+    logger.info("preflight 通过（网络/CDP/DB 均正常）")
     return True
 
 
