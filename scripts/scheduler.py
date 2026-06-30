@@ -3,6 +3,7 @@
 fire-and-forget 模式：脚本检查时间 → 匹配就跑 → 退出。
 OS (launchd) 负责周期触发，无需常驻进程。
 """
+import socket
 import subprocess
 import sys
 import time
@@ -61,6 +62,46 @@ def _notify(title: str, message: str) -> None:
     subprocess.run(["osascript", "-e", script], check=False)
 
 
+def _preflight_check() -> bool:
+    """运行前环境检查。返回 False 表示关键依赖不满足，应跳过本次运行。"""
+    issues: list[str] = []
+    warnings: list[str] = []
+
+    # 1. 网络连通性（TCP 握手 github.com:443）
+    try:
+        with socket.create_connection(("github.com", 443), timeout=5):
+            pass
+    except OSError:
+        issues.append("网络不通")
+
+    # 2. CDP proxy（抖音/小红书依赖，不通只是降级）
+    try:
+        with socket.create_connection(("localhost", 3456), timeout=3):
+            pass
+    except OSError:
+        warnings.append("CDP proxy 不可用，抖音/小红书将跳过")
+
+    # 3. DB 目录可写
+    try:
+        _DB.parent.mkdir(parents=True, exist_ok=True)
+        test = _DB.parent / ".write_test"
+        test.touch()
+        test.unlink()
+    except OSError:
+        issues.append("DB 目录不可写")
+
+    if warnings:
+        logger.warning("preflight 警告: %s", " | ".join(warnings))
+        _notify("搞笑视频墙 ⚠️", " | ".join(warnings))
+
+    if issues:
+        logger.error("preflight 失败，跳过本次运行: %s", " | ".join(issues))
+        _notify("搞笑视频墙 ❌", f"本次跳过: {' | '.join(issues)}")
+        return False
+
+    return True
+
+
 def _push_walls() -> None:
     changed: set[str] = set()
     for args in (["git", "diff", "--name-only"], ["git", "diff", "--cached", "--name-only"]):
@@ -116,6 +157,8 @@ def main() -> None:
     args = p.parse_args()
 
     if args.once:
+        if not _preflight_check():
+            sys.exit(1)
         run_all(skip_collect=args.no_collect, skip_tag=args.no_tag)
         return
 
@@ -126,6 +169,10 @@ def main() -> None:
 
     if _already_ran(matched["time"], now):
         sys.exit(0)
+
+    # 时间匹配后才做 preflight，避免每5分钟都检查一遍
+    if not _preflight_check():
+        sys.exit(1)
 
     _mark_ran(matched["time"], now)
     run_all()
