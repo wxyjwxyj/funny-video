@@ -6,6 +6,7 @@ OS (launchd) 负责周期触发，无需常驻进程。
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -57,9 +58,12 @@ def _mark_ran(time_str: str, now: datetime) -> None:
 
 
 def _notify(title: str, message: str) -> None:
-    """发送 macOS 系统通知。"""
+    """发送 macOS 系统通知，失败静默忽略。"""
     script = f'display notification "{message}" with title "{title}"'
-    subprocess.run(["osascript", "-e", script], check=False)
+    try:
+        subprocess.run(["osascript", "-e", script], capture_output=True, timeout=5)
+    except Exception:
+        pass
 
 
 def _preflight_check() -> bool:
@@ -67,12 +71,12 @@ def _preflight_check() -> bool:
     issues: list[str] = []
     warnings: list[str] = []
 
-    # 1. 网络连通性（TCP 握手 github.com:443）
+    # 1. 网络连通性（8.8.8.8:53 DNS直连，基本不走代理）
     try:
-        with socket.create_connection(("github.com", 443), timeout=5):
+        with socket.create_connection(("8.8.8.8", 53), timeout=5):
             pass
     except OSError:
-        issues.append("网络不通")
+        issues.append("网络不通 (8.8.8.8:53)")
 
     # 2. CDP proxy（抖音/小红书依赖，不通只是降级）
     try:
@@ -83,12 +87,10 @@ def _preflight_check() -> bool:
 
     # 3. DB 目录可写
     try:
-        _DB.parent.mkdir(parents=True, exist_ok=True)
-        test = _DB.parent / ".write_test"
-        test.touch()
-        test.unlink()
+        with tempfile.NamedTemporaryFile(dir=_DB.parent, delete=True):
+            pass
     except OSError:
-        issues.append("DB 目录不可写")
+        issues.append(f"DB 目录不可写 ({_DB.parent})")
 
     if warnings:
         logger.warning("preflight 警告: %s", " | ".join(warnings))
