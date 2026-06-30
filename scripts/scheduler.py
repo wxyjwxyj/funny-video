@@ -81,8 +81,12 @@ def _push_walls() -> None:
     if "nothing to commit" in (result.stdout + result.stderr):
         logger.info("无实际变更，跳过 commit")
         return
-    subprocess.run(["git", "push"], cwd=_ROOT, check=False)
-    logger.info("GitHub Pages 推送完成")
+    push = subprocess.run(["git", "push"], cwd=_ROOT, capture_output=True, text=True)
+    if push.returncode != 0:
+        logger.error("GitHub Pages 推送失败: %s", push.stderr.strip())
+        _notify("搞笑视频墙 ⚠️", f"push 失败，下次运行会重试")
+    else:
+        logger.info("GitHub Pages 推送完成")
 
 
 def run_all(skip_collect: bool = False, skip_tag: bool = False) -> None:
