@@ -22,6 +22,22 @@ _OUTPUT = Path(__file__).parent.parent / "wall.html"
 _ARCHIVE_DIR = Path(__file__).parent.parent / "archive"
 
 
+def _update_index_time(now: str) -> None:
+    """更新首页 index.html 副标题中的最后更新时间。"""
+    index_path = Path(__file__).parent.parent / "index.html"
+    if not index_path.exists():
+        return
+    content = index_path.read_text(encoding="utf-8")
+    # 替换 <p class="sub">...</p> 内容，保留缩进
+    updated = re.sub(
+        r'(<p class="sub">).*?(</p>)',
+        rf'\g<1>B站 · 抖音 · 小红书 · 更新于 {now}\g<2>',
+        content,
+    )
+    if updated != content:
+        index_path.write_text(updated, encoding="utf-8")
+
+
 def _update_archive_index(archive_dir: Path, wall_path: Path) -> None:
     """重新生成 archive/index.html，列出所有历史日期。"""
     files = sorted(archive_dir.glob("????-??-??.html"), reverse=True)
@@ -205,6 +221,9 @@ def generate(topic: str = "funny", min_score: int = 7, min_like_count: int = 0,
 
     out.write_text(html, encoding="utf-8")
     logger.info("generate_wall: 已写入 %s（%d 条，日期=%s）", out, len(videos), date_str)
+
+    # 更新首页 index.html 的副标题时间戳
+    _update_index_time(now)
 
     # 每次生成同步存档到 archive/YYYY-MM-DD.html
     archive_dir.mkdir(exist_ok=True)
