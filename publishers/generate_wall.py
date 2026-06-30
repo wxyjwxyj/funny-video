@@ -5,6 +5,7 @@
 每次生成同时存档到 archive/YYYY-MM-DD.html，并更新 archive/index.html。
 """
 import contextlib
+import html as _html
 import json
 import re
 from datetime import datetime, timezone
@@ -26,7 +27,6 @@ def _update_archive_index(archive_dir: Path, wall_path: Path) -> None:
     files = sorted(archive_dir.glob("????-??-??.html"), reverse=True)
     icon = "🤖" if "ai" in archive_dir.name else "📼"
     title = f"{icon} {archive_dir.name} 归档"
-    icon = "🤖" if "ai" in archive_dir.name else "📼"
     rows = ""
     for f in files:
         date = f.stem
@@ -83,35 +83,39 @@ def _format_num(n: int | None) -> str:
     return str(n)
 
 
+def _safe_url(url: str) -> str:
+    """过滤非 http(s) URL，防止 javascript: 注入。"""
+    url = (url or "").strip()
+    return url if url.startswith("http") else ""
+
+
 def _render_card(v: dict) -> str:
     tags = json.loads(v["tags"]) if v.get("tags") else []
-    tag_html = "".join(f'<span class="tag">{t}</span>' for t in tags[:3])
+    tag_html = "".join(f'<span class="tag">{_html.escape(t)}</span>' for t in tags[:3])
     score = v.get("funny_score") or 0
     score_icon = "🤖" if v.get("topic") != "funny" else "😂"
-    title = v.get("title", "").replace('"', "&quot;").replace("<", "&lt;")
-    embed = v.get("embed_url") or ""
-    page_url = v.get("page_url") or ""
-    category = (v.get("category") or "").replace('"', "&quot;")
-    platform = v.get("platform", "")
+    title = _html.escape(v.get("title") or "")
+    embed = _html.escape(_safe_url(v.get("embed_url") or ""))
+    page_url = _html.escape(_safe_url(v.get("page_url") or ""))
+    cover_url = _html.escape(_safe_url(v.get("cover_url") or ""))
+    category = _html.escape(v.get("category") or "")
+    platform = _html.escape(v.get("platform") or "")
+    author = _html.escape(v.get("author") or "")
 
     # 如果有 embed_url（B站 iframe）→ 内嵌播放
     # 否则（抖音禁止 iframe）→ 点卡片外跳原站
-    data_attr = (
-        f'data-embed="{embed}"'
-        if embed
-        else f'data-href="{page_url}"'
-    )
+    data_attr = f'data-embed="{embed}"' if embed else f'data-href="{page_url}"'
 
     return (
         f'<div class="card" {data_attr} data-score="{score}" data-cat="{category}" data-platform="{platform}">'
         f'<div class="thumb">'
-        f'<img loading="lazy" referrerpolicy="no-referrer" src="{v.get("cover_url","")}" alt="{title}">'
+        f'<img loading="lazy" referrerpolicy="no-referrer" src="{cover_url}" alt="{title}">'
         f'<span class="score-badge">{score_icon} {score}</span>'
         f'</div>'
         f'<div class="card-body">'
         f'<div class="title">{title}</div>'
         f'<div class="meta">'
-        f'<span>{v.get("author","")}</span>'
+        f'<span>{author}</span>'
         f'<span>▶ {_format_num(v.get("play_count"))}</span>'
         f'<span>👍 {_format_num(v.get("like_count"))}</span>'
         f'</div>'
@@ -174,7 +178,7 @@ def generate(topic: str = "funny", min_score: int = 7, min_like_count: int = 0,
         if c:
             cat_count[c] = cat_count.get(c, 0) + 1
     cat_buttons = "".join(
-        f'<button data-min="0" data-cat="{c}">{c}</button>'
+        f'<button data-min="0" data-cat="{_html.escape(c)}">{_html.escape(c)}</button>'
         for c, cnt in sorted(cat_count.items(), key=lambda x: -x[1])
         if cnt >= 2
     )
@@ -185,7 +189,7 @@ def generate(topic: str = "funny", min_score: int = 7, min_like_count: int = 0,
     page_title = display_name or f"🎬 {topic} 视频墙"
 
     # 平台切换按钮：页面内置默认值
-    pb_list = [("bilibili", "B站"), ("douyin", "抖音"), ("wechat_video", "视频号"), ("xiaohongshu", "小红书")]
+    pb_list = [("bilibili", "B站"), ("douyin", "抖音"), ("xiaohongshu", "小红书")]
     pb_html = "".join(f'<button data-platform="{k}">{v}</button>' for k, v in pb_list)
 
     html = (

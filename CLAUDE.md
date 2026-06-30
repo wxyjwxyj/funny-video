@@ -46,7 +46,17 @@ collectors/xiaohongshu.py（CDP，阶段三）       ┘
 ### Claude 调用约定（沿用 news1 踩坑结论）
 - prompt 指令用**全英文**（中文/"You are..." 句式会被代理拦截），输出内容可中文
 - 结构化输出用 `claude_call_tool()`（tool_use + thinking disabled），**不要**用 "Output ONLY JSON" + 文本解析
+- `_build_prompt()` 不需要 JSON 格式示范 —— tool_use 自动约束输出结构
+- batch tagging 用 `claude_call_tool`，`_call_batch` 返回 `list[dict | None]`，None=未收到结果（保持 DB NULL 待重试），不预填 fallback 值
 - prompt 里不写 `"<placeholder>"` / `"..."` 形似字面串的占位符
+
+### MiMo 配置（和 news1 一样）
+.env 三字段直连，不走 cc-switch 多 provider 代理（部分 provider 不支持 tool_use）：
+```
+ANTHROPIC_API_KEY=tp-xxx
+ANTHROPIC_BASE_URL=https://token-plan-cn.xiaomimimo.com/anthropic
+ANTHROPIC_MODEL=mimo-v2.5-pro
+```
 
 ### 采集约定
 - 一平台一 collector 文件，网络请求统一走 `retry_session()`
@@ -83,7 +93,7 @@ collectors/xiaohongshu.py（CDP，阶段三）       ┘
 | 1 | B站全链路（采集→去重→打标签→视频墙） | ✅ 完成 |
 | 2 | 抖音 CDP 采集 | ✅ 完成（推荐流→搜索接口，3词限速） |
 | 3 | 小红书 CDP DOM抓取 + 定时自动化 | ✅ 完成 |
-| 4 | 视频号 TikHub API | ⏸ 暂停（API数据过期，内容不可靠） |
+| 4 | 视频号 TikHub API | ❌ 已删除（API数据过期，无法访问，代码已移除） |
 | 5 | AI视频墙（B站搜索 CDP + 独立 topic） | ✅ 完成 |
 | 6 | GitHub Pages 上线 | ✅ 完成（wxyjwxyj.github.io/funny-video） |
 
