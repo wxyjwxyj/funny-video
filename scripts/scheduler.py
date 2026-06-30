@@ -55,6 +55,12 @@ def _mark_ran(time_str: str, now: datetime) -> None:
             f.unlink()
 
 
+def _notify(title: str, message: str) -> None:
+    """发送 macOS 系统通知。"""
+    script = f'display notification "{message}" with title "{title}"'
+    subprocess.run(["osascript", "-e", script], check=False)
+
+
 def _push_walls() -> None:
     changed: set[str] = set()
     for args in (["git", "diff", "--name-only"], ["git", "diff", "--cached", "--name-only"]):
@@ -81,13 +87,20 @@ def _push_walls() -> None:
 
 def run_all(skip_collect: bool = False, skip_tag: bool = False) -> None:
     init_db(_DB)
+    failed: list[str] = []
     for topic_name in list_topics():
         try:
             run_pipeline(topic_name, skip_collect=skip_collect, skip_tag=skip_tag)
         except Exception:
             logger.exception("[%s] 链路异常，跳过继续", topic_name)
+            failed.append(topic_name)
     logger.info("==== 所有 topic 完成 ====")
     _push_walls()
+    # macOS 通知：成功/部分失败均告知
+    if failed:
+        _notify("搞笑视频墙 ⚠️", f"部分 topic 失败: {', '.join(failed)}")
+    else:
+        _notify("搞笑视频墙 ✅", f"已更新 {time.strftime('%H:%M')}")
 
 
 def main() -> None:

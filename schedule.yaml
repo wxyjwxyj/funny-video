@@ -1,10 +1,9 @@
 # 调度配置 — 修改时间无需改 plist
+# 避开 Mac 休眠时段：06:00/00:00 容易被 launchd 积压后跳过
 runs:
-  - time: "06:00"
+  - time: "08:00"
     steps: [collect, tag, generate, push]
-  - time: "12:00"
+  - time: "13:00"
     steps: [collect, tag, generate, push]
-  - time: "18:00"
-    steps: [collect, tag, generate, push]
-  - time: "00:00"
+  - time: "19:00"
     steps: [collect, tag, generate, push]
