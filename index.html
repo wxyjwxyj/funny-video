@@ -6,15 +6,16 @@
 <title>搞笑视频聚合墙</title>
 <style>
 :root {
-  --bg: #0a0a0f;
-  --surface: #13131a;
-  --surface-2: #1c1c28;
-  --border: #2a2a3a;
-  --text: #e4e4f0;
-  --text-sub: #9090b0;
-  --text-muted: #5a5a7a;
+  --bg: #f7f8fc;
+  --surface: #ffffff;
+  --surface-2: #f3f4f8;
+  --border: #e8eaed;
+  --text: #1a1a2e;
+  --text-sub: #6b7280;
+  --text-muted: #9ca3af;
   --accent: #fb7299;
-  --accent-dim: rgba(251,114,153,.1);
+  --accent-dim: rgba(251,114,153,.10);
+  --header-grad: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 body {
@@ -27,14 +28,14 @@ body {
 .hero {
   text-align: center;
   padding: 72px 24px 48px;
-  background: radial-gradient(ellipse 70% 45% at 50% 0%, rgba(251,114,153,.08) 0%, transparent 65%);
-  border-bottom: 1px solid var(--border);
+  background: var(--header-grad);
+  border-bottom: none;
 }
 .live-badge {
   display: inline-flex; align-items: center; gap: 6px;
-  background: var(--surface-2); border: 1px solid var(--border);
+  background: rgba(255,255,255,.18); border: 1px solid rgba(255,255,255,.3);
   border-radius: 20px; padding: 4px 12px 4px 10px;
-  font-size: 12px; color: var(--text-sub);
+  font-size: 12px; color: rgba(255,255,255,.9);
   margin-bottom: 22px;
 }
 .live-dot {
@@ -45,15 +46,15 @@ body {
 @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(.8)} }
 .hero h1 {
   font-size: 38px; font-weight: 800; letter-spacing: -.025em; margin-bottom: 10px;
-  line-height: 1.1;
+  line-height: 1.1; color: #fff;
 }
-.hero h1 .hi { color: var(--accent); }
-.hero .sub { color: var(--text-sub); font-size: 15px; margin-bottom: 28px; line-height: 1.5; }
+.hero h1 .hi { color: #ffd6e7; }
+.hero .sub { color: rgba(255,255,255,.8); font-size: 15px; margin-bottom: 28px; line-height: 1.5; }
 .platforms { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; }
 .platforms span {
-  background: var(--surface); border: 1px solid var(--border);
+  background: rgba(255,255,255,.15); border: 1px solid rgba(255,255,255,.25);
   border-radius: 8px; padding: 5px 12px;
-  font-size: 13px; color: var(--text-sub);
+  font-size: 13px; color: rgba(255,255,255,.9);
 }
 
 /* ── Content ── */
@@ -70,22 +71,22 @@ main { flex: 1; padding: 40px 24px; max-width: 880px; margin: 0 auto; width: 100
 
 .nav-card {
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: none;
+  box-shadow: 0 1px 3px rgba(0,0,0,.07), 0 2px 8px rgba(0,0,0,.05);
   border-radius: 16px; padding: 24px 20px;
   text-decoration: none; color: inherit;
   display: flex; flex-direction: column; gap: 10px;
-  transition: transform .18s cubic-bezier(.34,1.3,.64,1), border-color .18s, background .18s;
+  transition: transform .18s cubic-bezier(.34,1.3,.64,1), box-shadow .18s;
 }
 .nav-card:hover {
   transform: translateY(-3px);
-  border-color: rgba(251,114,153,.4);
-  background: var(--surface-2);
+  box-shadow: 0 8px 24px rgba(102,126,234,.18), 0 0 0 1px rgba(102,126,234,.15);
 }
 .nav-card.primary {
-  border-color: rgba(251,114,153,.22);
-  background: linear-gradient(140deg, var(--surface-2) 0%, rgba(251,114,153,.05) 100%);
+  background: linear-gradient(140deg, #fff 0%, rgba(251,114,153,.06) 100%);
+  box-shadow: 0 2px 8px rgba(251,114,153,.15), 0 0 0 1px rgba(251,114,153,.12);
 }
-.nav-card.primary:hover { border-color: rgba(251,114,153,.5); }
+.nav-card.primary:hover { box-shadow: 0 8px 24px rgba(251,114,153,.22), 0 0 0 1px rgba(251,114,153,.2); }
 .nav-icon { font-size: 28px; line-height: 1; }
 .nav-label { font-size: 16px; font-weight: 700; }
 .nav-desc { font-size: 13px; color: var(--text-muted); line-height: 1.4; }
@@ -102,7 +103,7 @@ footer {
 <div class="hero">
   <div class="live-badge"><span class="live-dot"></span>每日自动更新</div>
   <h1>🎬 <span class="hi">搞笑</span>视频聚合墙</h1>
-  <p class="sub">B站 · 抖音 · 小红书 · 更新于 2026-07-01 14:20:42</p>
+  <p class="sub">B站 · 抖音 · 小红书 · 更新于 2026-07-01 19:08:19</p>
   <div class="platforms">
     <span>📺 哔哩哔哩</span>
     <span>🎵 抖音</span>
