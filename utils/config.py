@@ -19,10 +19,12 @@ logger = logging.getLogger(__name__)
 
 
 def _load_dotenv() -> None:
-    """零依赖加载项目根目录的 .env 到 os.environ（不覆盖已存在的环境变量）。
+    """零依赖加载项目根目录的 .env 到 os.environ（覆盖已存在的环境变量）。
 
     只解析 KEY=VALUE 行，忽略空行与 # 注释，去掉值两端引号。
-    已在环境中的变量优先级更高，故用 setdefault 不覆盖。
+    项目 .env 是配置权威：覆盖 shell 已有的同名变量，避免宿主 shell 里残留的
+    ANTHROPIC_BASE_URL（如 Claude Code 的本地路由代理 127.0.0.1:15721）
+    污染 MiMo 直连，导致打标签全部返回「未知模型」。
     """
     if not ENV_PATH.exists():
         return
@@ -39,7 +41,7 @@ def _load_dotenv() -> None:
                 value = value[:value.index(' #')]
         value = value.strip().strip('"').strip("'")
         if key:
-            os.environ.setdefault(key, value)
+            os.environ[key] = value
 
 
 # 模块导入时即加载，确保后续 os.getenv 能读到 .env 的值
