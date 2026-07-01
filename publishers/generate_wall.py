@@ -42,13 +42,22 @@ def _update_archive_index(archive_dir: Path, wall_path: Path) -> None:
     """重新生成 archive/index.html，列出所有历史日期。"""
     files = sorted(archive_dir.glob("????-??-??.html"), reverse=True)
     icon = "🤖" if "ai" in archive_dir.name else "📼"
-    title = f"{icon} {archive_dir.name} 归档"
+    # 归档标题中文映射（archive_dir.name 形如 funny_archive / ai_archive）
+    name_labels = {"funny": "搞笑", "ai": "AI"}
+    base = archive_dir.name.replace("_archive", "")
+    title = f"{icon} {name_labels.get(base, base)}归档"
     rows = ""
     for f in files:
         date = f.stem
         m = re.search(r"(\d+) 条", f.read_text(encoding="utf-8"))
         count = m.group(1) if m else "?"
-        rows += f"<tr><td><a href='{f.name}'>{date}</a></td><td>{count} 条</td></tr>\n"
+        rows += (
+            f'<a href="{f.name}" class="row">'
+            f'<span class="date">{date}</span>'
+            f'<span class="count">{count} 条</span>'
+            f'<span class="arrow">→</span>'
+            f'</a>\n'
+        )
 
     back_name = wall_path.name
     html = f"""<!DOCTYPE html>
@@ -58,34 +67,30 @@ def _update_archive_index(archive_dir: Path, wall_path: Path) -> None:
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{title}</title>
 <style>
+:root{{--bg:#0a0a0f;--surface:#13131a;--surface-2:#1c1c28;--border:#2a2a3a;--text:#e4e4f0;--text-sub:#9090b0;--text-muted:#5a5a7a;--accent:#fb7299}}
 *,*::before,*::after{{box-sizing:border-box;margin:0;padding:0}}
-body{{background:#0f0f0f;color:#e0e0e0;font-family:system-ui,sans-serif}}
-.container{{max-width:480px;margin:40px auto;background:#1a1a1a;border-radius:12px;overflow:hidden}}
-.header{{background:#1e1e1e;padding:24px;border-bottom:1px solid #2a2a2a}}
-.header h1{{font-size:18px;font-weight:600}}
-.header p{{font-size:13px;color:#888;margin-top:4px}}
-table{{width:100%;border-collapse:collapse}}
-th{{padding:10px 24px;text-align:left;font-size:11px;color:#666;font-weight:600;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #2a2a2a}}
-td{{padding:14px 24px;border-bottom:1px solid #1e1e1e;font-size:14px;color:#aaa}}
-td a{{color:#fb7299;text-decoration:none;font-weight:600}}
-td a:hover{{text-decoration:underline}}
-tr:hover td{{background:#1e1e1e}}
-.back{{display:block;padding:12px 24px;font-size:13px;color:#666;text-decoration:none}}
-.back:hover{{color:#fb7299}}
+body{{background:var(--bg);color:var(--text);font-family:-apple-system,system-ui,sans-serif;min-height:100vh}}
+header{{position:sticky;top:0;z-index:10;background:rgba(10,10,15,.88);backdrop-filter:blur(16px);border-bottom:1px solid var(--border);padding:0 20px;display:flex;align-items:center;gap:12px;height:52px}}
+.back-link{{color:var(--text-muted);text-decoration:none;font-size:13px}}
+.back-link:hover{{color:var(--accent)}}
+.header-title{{font-size:16px;font-weight:700}}
+.header-count{{margin-left:auto;background:var(--surface-2);border:1px solid var(--border);border-radius:20px;padding:3px 10px;font-size:12px;color:var(--text-sub)}}
+.list{{max-width:520px;margin:0 auto;padding:20px 16px 48px}}
+.row{{display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--surface);border:1px solid var(--border);border-radius:10px;text-decoration:none;color:inherit;transition:all .15s;margin-bottom:8px}}
+.row:hover{{border-color:rgba(251,114,153,.35);background:var(--surface-2);transform:translateX(2px)}}
+.date{{font-size:14px;font-weight:600;color:var(--text);font-variant-numeric:tabular-nums}}
+.count{{font-size:13px;color:var(--text-muted);margin-left:auto}}
+.arrow{{font-size:14px;color:var(--accent);opacity:.6}}
 </style>
 </head>
 <body>
-<div class="container">
-  <div class="header">
-    <h1>{icon} {title}</h1>
-    <p>共 {len(files)} 天 · 点击日期查看当天内容</p>
-  </div>
-  <a href="../{back_name}" class="back">← 返回今日</a>
-  <table>
-    <thead><tr><th>日期</th><th>视频数</th></tr></thead>
-    <tbody>{rows}</tbody>
-  </table>
-</div>
+<header>
+  <a href="../{back_name}" class="back-link">← 返回今日</a>
+  <span class="header-title">{title}</span>
+  <span class="header-count">共 {len(files)} 天</span>
+</header>
+<div class="list">
+{rows}</div>
 </body>
 </html>"""
     (archive_dir / "index.html").write_text(html, encoding="utf-8")
@@ -118,6 +123,13 @@ def _render_card(v: dict) -> str:
     platform = _html.escape(v.get("platform") or "")
     author = _html.escape(v.get("author") or "")
 
+    # 平台显示名称
+    platform_labels = {"bilibili": "B站", "douyin": "抖音", "xiaohongshu": "小红书"}
+    platform_label = platform_labels.get(platform, platform)
+
+    # 评分徽章 CSS 类（按分段着色）
+    score_cls = "s9" if score >= 9 else ("s8" if score >= 8 else "s7")
+
     # 如果有 embed_url（B站 iframe）→ 内嵌播放
     # 否则（抖音禁止 iframe）→ 点卡片外跳原站
     data_attr = f'data-embed="{embed}"' if embed else f'data-href="{page_url}"'
@@ -126,16 +138,19 @@ def _render_card(v: dict) -> str:
         f'<div class="card" {data_attr} data-score="{score}" data-cat="{category}" data-platform="{platform}">'
         f'<div class="thumb">'
         f'<img loading="lazy" referrerpolicy="no-referrer" src="{cover_url}" alt="{title}">'
-        f'<span class="score-badge">{score_icon} {score}</span>'
+        f'<span class="platform-icon">{platform_label}</span>'
+        f'<span class="score-badge {score_cls}">{score_icon} {score}</span>'
         f'</div>'
         f'<div class="card-body">'
         f'<div class="title">{title}</div>'
-        f'<div class="meta">'
-        f'<span>{author}</span>'
+        f'<div class="card-meta">'
+        f'<span class="author">{author}</span>'
+        f'<span class="stats">'
         f'<span>▶ {_format_num(v.get("play_count"))}</span>'
         f'<span>👍 {_format_num(v.get("like_count"))}</span>'
+        f'</span>'
         f'</div>'
-        f'<div class="meta" style="margin-top:4px">{tag_html}</div>'
+        f'<div class="tags">{tag_html}</div>'
         f'</div></div>'
     )
 

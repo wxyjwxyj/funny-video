@@ -16,5 +16,8 @@ __pycache__/
 .claude/logs/
 *.log
 
+# 调度运行标记（本机运行时状态，跨设备不共享）
+.ran/
+
 # 系统
 .DS_Store
