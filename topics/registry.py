@@ -7,6 +7,7 @@ from datetime import date as _date
 
 from collectors.bilibili import FUNNY_CATEGORIES
 from topics.config import CollectorDef, TopicConfig
+from utils.trending import fetch_douyin_trending
 
 # ── 关键词轮换 ────────────────────────────────────────────────
 # 每 GROUP_SIZE 个词为一组，按今日日期选当天用的组，4天轮一圈。
@@ -48,6 +49,18 @@ _AI_KW_DOUYIN = ["Claude", "AI Agent", "可灵AI"]
 _XHS_AI_KW = ["Claude", "即梦AI", "AI绘画", "DeepSeek", "可灵AI", "ChatGPT"]
 
 
+def _douyin_funny_keywords() -> list[str]:
+    """当日抖音搜索词：热搜榜前5词 + 2个轮换搞笑词，共7词。
+
+    热搜词代表今天最热的话题，搞笑博主经常围绕热点出梗；
+    轮换词兜底，确保搜到的内容里有明确的搞笑内容。
+    失败时降级为纯轮换词。
+    """
+    trending = fetch_douyin_trending(top_n=5)
+    funny_rotation = _daily_rotate(_DOUYIN_FUNNY_KW_POOL, size=2)
+    return trending + funny_rotation if trending else _daily_rotate(_DOUYIN_FUNNY_KW_POOL)
+
+
 def _build_topics() -> dict[str, TopicConfig]:
     return {
         "funny": TopicConfig(
@@ -62,7 +75,7 @@ def _build_topics() -> dict[str, TopicConfig]:
                               "content_hash_prefix": "bilibili_funny"},
                              platform="bilibili"),
                 CollectorDef("douyin_search",
-                             {"keywords": _daily_rotate(_DOUYIN_FUNNY_KW_POOL)},
+                             {"keywords": _douyin_funny_keywords()},
                              skip_flag="douyin"),
                 CollectorDef("xiaohongshu_search",
                              {"keywords": _daily_rotate(_XHS_FUNNY_KW_POOL)},
