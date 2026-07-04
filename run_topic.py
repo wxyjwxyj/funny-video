@@ -21,6 +21,18 @@ logger = get_logger(__name__)
 _DB = Path(__file__).parent / "video.db"
 
 
+def _classify_error(e: Exception) -> str:
+    """将采集器异常分类为可读短标签，用于通知消息。"""
+    msg = str(e).lower()
+    if any(k in msg for k in ("timeout", "timed out", "time out")):
+        return "超时"
+    if any(k in msg for k in ("connection", "connect", "refused", "unreachable", "cdp")):
+        return "CDP连接"
+    if any(k in msg for k in ("404", "403", "401", "500", "502", "503")):
+        return "HTTP错误"
+    return type(e).__name__
+
+
 def run_pipeline(topic_name: str, *, tag_batch: int | None = None,
                  skip_collect: bool = False, skip_tag: bool = False,
                  skip_flags: set[str] | None = None,
@@ -35,8 +47,8 @@ def run_pipeline(topic_name: str, *, tag_batch: int | None = None,
     skip_flags = skip_flags or set()
 
     total_inserted = 0
-    platform_stats: dict[str, int] = {}   # platform → 新增条数
-    failed_collectors: list[str] = []
+    platform_stats: dict[str, int] = {}        # platform → 新增条数
+    failed_collectors: list[tuple[str, str]] = []  # (collector_name, error_reason)
 
     # ── 采集 ──
     if not skip_collect:
@@ -69,9 +81,10 @@ def run_pipeline(topic_name: str, *, tag_batch: int | None = None,
 
             if last_err is not None:
                 if cdef.optional:
-                    logger.warning("[%s] %s 采集失败（降级）: %s",
-                                   topic_name, cdef.name, last_err)
-                    failed_collectors.append(cdef.name)
+                    reason = _classify_error(last_err)
+                    logger.warning("[%s] %s 采集失败（降级，%s）: %s",
+                                   topic_name, cdef.name, reason, last_err)
+                    failed_collectors.append((cdef.name, reason))
                 else:
                     raise last_err
 

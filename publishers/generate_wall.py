@@ -18,7 +18,6 @@ logger = get_logger(__name__)
 
 _TEMPLATE = Path(__file__).parent / "templates" / "wall.html"
 _DB_PATH = Path(__file__).parent.parent / "video.db"
-_OUTPUT = Path(__file__).parent.parent / "wall.html"
 _ARCHIVE_DIR = Path(__file__).parent.parent / "archive"
 
 
@@ -146,6 +145,26 @@ def _safe_url(url: str) -> str:
     return url if url.startswith("http") else ""
 
 
+def _render_featured_card(v: dict) -> str:
+    """渲染精华条（score≥9）里的紧凑卡片，用于顶部横向滚动区。"""
+    score = v.get("funny_score") or 0
+    title = _html.escape(v.get("title") or "")
+    embed = _html.escape(_safe_url(v.get("embed_url") or ""))
+    page_url = _html.escape(_safe_url(v.get("page_url") or ""))
+    cover_url = _html.escape(_safe_url(v.get("cover_url") or ""))
+    platform = _html.escape(v.get("platform") or "")
+    data_attr = f'data-embed="{embed}"' if embed else f'data-href="{page_url}"'
+    return (
+        f'<div class="feat-card" {data_attr} data-platform="{platform}">'
+        f'<div class="feat-thumb">'
+        f'<img loading="lazy" referrerpolicy="no-referrer" src="{cover_url}" alt="{title}">'
+        f'<span class="feat-score">⭐ {score}</span>'
+        f'</div>'
+        f'<div class="feat-title">{title}</div>'
+        f'</div>'
+    )
+
+
 def _render_card(v: dict) -> str:
     tags = json.loads(v["tags"]) if v.get("tags") else []
     tag_html = "".join(f'<span class="tag">{_html.escape(t)}</span>' for t in tags[:3])
@@ -255,6 +274,22 @@ def generate(topic: str = "funny", min_score: int = 7, min_like_count: int = 0,
 
     cards_html = "\n".join(_render_card(v) for v in videos)
 
+    # 精华条：score≥9 的视频单独生成顶部横向滚动区
+    featured = [v for v in videos if (v.get("funny_score") or 0) >= 9]
+    if featured:
+        feat_cards_html = "\n".join(_render_featured_card(v) for v in featured)
+        featured_section = (
+            f'<section class="featured">'
+            f'<div class="featured-hd">'
+            f'<span class="featured-label">⭐ 今日精选</span>'
+            f'<span class="featured-count">{len(featured)} 条</span>'
+            f'</div>'
+            f'<div class="featured-scroll">{feat_cards_html}</div>'
+            f'</section>'
+        )
+    else:
+        featured_section = ""
+
     # 分类过滤按钮（取出现次数 >= 2 的分区）
     cat_count: dict[str, int] = {}
     for v in videos:
@@ -284,6 +319,7 @@ def generate(topic: str = "funny", min_score: int = 7, min_like_count: int = 0,
         .replace("{{date_label}}", date_str)
         .replace("{{platform_buttons}}", pb_html)
         .replace("{{category_buttons}}", cat_buttons)
+        .replace("{{featured_section}}", featured_section)
         .replace("{{cards}}", cards_html)
     )
 

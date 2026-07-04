@@ -58,6 +58,19 @@ def _mark_ran(time_str: str, now: datetime) -> None:
             f.unlink()
 
 
+def _rotate_launchd_log(max_bytes: int = 2 * 1024 * 1024, keep_lines: int = 500) -> None:
+    """launchd 日志超过 max_bytes 时，只保留末尾 keep_lines 行，防止无限增长。"""
+    log_path = Path.home() / "funny_video_launchd.log"
+    try:
+        if not log_path.exists() or log_path.stat().st_size <= max_bytes:
+            return
+        lines = log_path.read_text(encoding="utf-8", errors="replace").splitlines()
+        log_path.write_text("\n".join(lines[-keep_lines:]) + "\n", encoding="utf-8")
+        logger.info("已轮转 launchd 日志（保留末尾 %d 行）", keep_lines)
+    except Exception as e:
+        logger.warning("launchd 日志轮转失败: %s", e)
+
+
 def _notify(title: str, message: str) -> None:
     """发送 macOS 系统通知，失败静默忽略。"""
     script = f'display notification "{message}" with title "{title}"'
@@ -153,14 +166,16 @@ def run_all(skip_collect: bool = False, skip_tag: bool = False) -> None:
             except Exception:
                 logger.exception("[%s] 链路异常，跳过继续", t)
                 results.append({"topic": t, "inserted": 0, "tagged": 0,
-                                 "platforms": {}, "failed": [t]})
+                                 "platforms": {}, "failed": [(t, "异常")]})
 
     logger.info("==== 所有 topic 完成 ====")
     _push_walls()
 
     # 汇总各 topic 的采集统计，组装通知
     total_inserted = sum(r.get("inserted", 0) for r in results)
-    all_failed = [c for r in results for c in r.get("failed", [])]
+    all_failed: list[tuple[str, str]] = [
+        (name, reason) for r in results for name, reason in r.get("failed", [])
+    ]
     platform_lines = []
     for r in results:
         for p, n in r.get("platforms", {}).items():
@@ -173,8 +188,9 @@ def run_all(skip_collect: bool = False, skip_tag: bool = False) -> None:
         stats_str += f"（{'  '.join(platform_lines)}）"
 
     if all_failed:
-        _notify("搞笑视频墙 ⚠️",
-                f"{stats_str}  失败: {', '.join(all_failed)}")
+        # 格式示例："抖音(CDP连接)  小红书(超时)"，方便一眼定位原因
+        fail_parts = "  ".join(f"{name}({reason})" for name, reason in all_failed)
+        _notify("搞笑视频墙 ⚠️", f"{stats_str}  失败: {fail_parts}")
     else:
         _notify("搞笑视频墙 ✅",
                 f"{stats_str}  {time.strftime('%H:%M')}")
@@ -187,6 +203,8 @@ def main() -> None:
     p.add_argument("--no-collect", action="store_true")
     p.add_argument("--no-tag", action="store_true")
     args = p.parse_args()
+
+    _rotate_launchd_log()
 
     if args.once:
         if not _preflight_check():
