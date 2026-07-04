@@ -7,6 +7,7 @@ import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from storage import repository
+from storage.repository import batch_update_tags
 from utils.claude import claude_call_tool
 from utils.log import get_logger
 
@@ -106,15 +107,17 @@ def run(batch_size: int | None = None, workers: int = 4, topic: str = "funny", t
             batch = fut_to_batch[future]
             try:
                 results = future.result()
+                # 收集本批次所有有效结果，一次性批量写库
+                to_write: list[tuple[str, list[str], int, bool]] = []
                 for v, r in zip(batch, results):
                     if r is None:
                         logger.warning("tagging: %s 未收到评分，跳过（下次重试）", v["title"][:35])
                         continue
-                    repository.update_tags(
-                        v["content_hash"], r["tags"], r["score"], r["is_unsafe"]
-                    )
                     logger.info("tagging: %s → score=%d tags=%s", v["title"][:35], r["score"], r["tags"])
-                    success += 1
+                    to_write.append((v["content_hash"], r["tags"], r["score"], r["is_unsafe"]))
+                if to_write:
+                    batch_update_tags(to_write)
+                    success += len(to_write)
             except Exception as e:
                 logger.warning("tagging: 批次失败 (%s)，跳过 %d 条", e, len(batch))
 

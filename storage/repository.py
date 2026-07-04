@@ -47,11 +47,34 @@ def upsert_video(video: dict) -> str:
 
 
 def upsert_videos(videos: list[dict]) -> dict[str, int]:
-    """批量 upsert，返回 {"inserted": N, "updated": M}。"""
+    """批量 upsert，单事务写完整个列表，返回 {"inserted": N, "updated": M}。"""
     counts = {"inserted": 0, "updated": 0}
-    for v in videos:
-        result = upsert_video(v)
-        counts[result] += 1
+    if not videos:
+        return counts
+
+    # 在同一个连接里完成所有行的 SELECT + INSERT，避免 N 次连接开销
+    with contextlib.closing(get_db()) as conn:
+        with conn:
+            for v in videos:
+                row = {**v}
+                for field in ("extra", "tags"):
+                    if isinstance(row.get(field), (dict, list)):
+                        row[field] = json.dumps(row[field], ensure_ascii=False)
+
+                cols = list(row.keys())
+                placeholders = ", ".join(["?"] * len(cols))
+                update_cols = [c for c in cols if c not in ("content_hash", "created_at")]
+                update_set = ", ".join(f"{c} = excluded.{c}" for c in update_cols)
+                sql = (
+                    f"INSERT INTO videos ({', '.join(cols)}) VALUES ({placeholders})"
+                    f" ON CONFLICT(content_hash) DO UPDATE SET {update_set}"
+                )
+                exists = conn.execute(
+                    "SELECT 1 FROM videos WHERE content_hash=?", (row["content_hash"],)
+                ).fetchone()
+                conn.execute(sql, [row[c] for c in cols])
+                counts["updated" if exists else "inserted"] += 1
+
     return counts
 
 
@@ -73,10 +96,24 @@ def list_untagged(limit: int | None = 50, topic: str | None = None) -> list[dict
 
 def update_tags(content_hash: str, tags: list[str], funny_score: int, is_unsafe: bool = False) -> None:
     """回写 Claude 打标结果。is_unsafe=True 时直接将视频标为 inactive，不展示。"""
-    status = "inactive" if is_unsafe else "active"
+    batch_update_tags([(content_hash, tags, funny_score, is_unsafe)])
+
+
+def batch_update_tags(items: list[tuple[str, list[str], int, bool]]) -> None:
+    """批量回写打标结果，单事务写完整个批次，减少连接开销。
+
+    Args:
+        items: [(content_hash, tags, funny_score, is_unsafe), ...]
+    """
+    if not items:
+        return
+    rows = [
+        (json.dumps(tags, ensure_ascii=False), score, unsafe, "inactive" if unsafe else "active", ch)
+        for ch, tags, score, unsafe in items
+    ]
     with contextlib.closing(get_db()) as conn:
         with conn:
-            conn.execute(
+            conn.executemany(
                 "UPDATE videos SET tags=?, funny_score=?, is_unsafe=?, status=? WHERE content_hash=?",
-                (json.dumps(tags, ensure_ascii=False), funny_score, is_unsafe, status, content_hash),
+                rows,
             )

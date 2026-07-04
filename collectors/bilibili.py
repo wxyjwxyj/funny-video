@@ -5,7 +5,7 @@ import requests
 
 from collectors.base import (
     BaseCollector, CDPCollector, CollectorError, LoginExpiredError,
-    make_video, register_collector, create_collector,
+    _ts_to_iso, make_video, register_collector, create_collector,
 )
 from utils.http import retry_session
 from utils.log import get_logger
@@ -79,6 +79,7 @@ class BilibiliPopularCollector(BaseCollector):
         stat = item.get("stat", {})
         owner = item.get("owner", {})
 
+        # pubdate 是 Unix 时间戳，转为 ISO8601 存储
         v = make_video(
             platform="bilibili", platform_video_id=bvid,
             content_hash_prefix="bilibili", topic=self.topic,
@@ -92,6 +93,7 @@ class BilibiliPopularCollector(BaseCollector):
             category=tname,
             page_url=f"https://www.bilibili.com/video/{bvid}",
             embed_url=f"https://player.bilibili.com/player.html?bvid={bvid}&autoplay=0",
+            published_at=_ts_to_iso(item.get("pubdate")),
             extra={
                 "coin": stat.get("coin"),
                 "favorite": stat.get("favorite"),

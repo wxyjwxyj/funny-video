@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>{{page_title}}</title>
+<title>🎬 funny 视频墙</title>
 <style>
 :root {
   --bg: #f7f8fc;
@@ -170,10 +170,6 @@ header {
   padding: 2px 8px; border-radius: 6px;
   color: var(--text-sub); font-size: 11px;
 }
-.pub-age {
-  font-size: 11px; color: var(--text-muted);
-  white-space: nowrap; flex-shrink: 0;
-}
 
 /* ── 空状态 ── */
 .empty {
@@ -225,11 +221,11 @@ header {
 <body>
 <header>
   <a href="index.html" class="back-link">← 首页</a>
-  <span class="header-title">{{page_title}}</span>
+  <span class="header-title">🎬 funny 视频墙</span>
   <div class="header-stats">
-    <span class="stat-badge">{{date_label}}</span>
-    <span class="stat-badge">{{total}} 条</span>
-    <span class="update-time">更新 {{generated_at}}</span>
+    <span class="stat-badge">2026-07-02</span>
+    <span class="stat-badge">1 条</span>
+    <span class="update-time">更新 2026-07-02 22:11:19</span>
   </div>
 </header>
 <div class="filters" id="filters">
@@ -237,14 +233,12 @@ header {
   <button data-min="7">7+ 分</button>
   <button data-min="9">✨ 精选</button>
   <div class="filter-sep"></div>
-  <button data-max-age="7">🆕 近7天</button>
+  <button data-platform="bilibili">B站</button><button data-platform="douyin">抖音</button><button data-platform="xiaohongshu">小红书</button>
   <div class="filter-sep"></div>
-  {{platform_buttons}}
-  <div class="filter-sep"></div>
-  {{category_buttons}}
+  
 </div>
 <div class="grid" id="grid">
-  {{cards}}
+  <div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BVaaa&amp;autoplay=0" data-score="8" data-cat="鬼畜" data-platform="bilibili"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="http://example.com/cover.jpg" alt="搞笑视频BVaaa"><span class="platform-icon">B站</span><span class="score-badge s8">😂 8</span></div><div class="card-body"><div class="title">搞笑视频BVaaa</div><div class="card-meta"><span class="author">UP</span><span class="stats"><span>▶ 5.0万</span><span>👍 3000</span></span></div><div class="tags"><span class="tag">搞笑</span><span class="tag">鬼畜</span></div></div></div>
   <div class="empty" id="empty">
     <div class="icon">🔍</div>
     <p>没有符合条件的视频</p>
@@ -291,7 +285,7 @@ document.querySelectorAll('.card').forEach(card => {
   };
 });
 
-// 过滤（评分 + 平台 + 分区 + 新鲜度）
+// 过滤（评分 + 平台 + 分区）
 const cards = [...document.querySelectorAll('.card')];
 const emptyEl = document.getElementById('empty');
 document.getElementById('filters').addEventListener('click', e => {
@@ -302,15 +296,12 @@ document.getElementById('filters').addEventListener('click', e => {
   const min = parseInt(btn.dataset.min ?? '0');
   const cat = btn.dataset.cat ?? '';
   const platform = btn.dataset.platform ?? '';
-  const maxAge = btn.dataset.maxAge ? parseInt(btn.dataset.maxAge) : null;
   let visible = 0;
   cards.forEach(c => {
     const score = parseInt(c.dataset.score ?? '0');
-    const age = parseInt(c.dataset.age ?? '9999');
     const show = (min === 0 || score >= min)
       && (cat === '' || c.dataset.cat === cat)
-      && (platform === '' || c.dataset.platform === platform)
-      && (maxAge === null || age <= maxAge);
+      && (platform === '' || c.dataset.platform === platform);
     c.style.display = show ? '' : 'none';
     if (show) visible++;
   });

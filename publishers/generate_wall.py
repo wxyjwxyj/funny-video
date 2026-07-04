@@ -38,23 +38,34 @@ def _update_index_time(now: str) -> None:
         index_path.write_text(updated, encoding="utf-8")
 
 
-def _update_archive_index(archive_dir: Path, wall_path: Path) -> None:
-    """重新生成 archive/index.html，列出所有历史日期。"""
+def _update_archive_index(archive_dir: Path, wall_path: Path, date_str: str, count: int) -> None:
+    """重新生成 archive/index.html，列出所有历史日期。
+
+    条数从 counts.json 读取，避免每次重读所有历史 HTML 文件。
+    """
+    counts_file = archive_dir / "counts.json"
+    # 读现有条数索引，追加本次新条目
+    try:
+        counts_data: dict[str, int] = json.loads(counts_file.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError):
+        counts_data = {}
+    counts_data[date_str] = count
+    counts_file.write_text(json.dumps(counts_data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    # 只枚举文件名，不读文件内容
     files = sorted(archive_dir.glob("????-??-??.html"), reverse=True)
     icon = "🤖" if "ai" in archive_dir.name else "📼"
-    # 归档标题中文映射（archive_dir.name 形如 funny_archive / ai_archive）
     name_labels = {"funny": "搞笑", "ai": "AI"}
     base = archive_dir.name.replace("_archive", "")
     title = f"{icon} {name_labels.get(base, base)}归档"
     rows = ""
     for f in files:
-        date = f.stem
-        m = re.search(r"(\d+) 条", f.read_text(encoding="utf-8"))
-        count = m.group(1) if m else "?"
+        d = f.stem
+        cnt = counts_data.get(d, "?")
         rows += (
             f'<a href="{f.name}" class="row">'
-            f'<span class="date">{date}</span>'
-            f'<span class="count">{count} 条</span>'
+            f'<span class="date">{d}</span>'
+            f'<span class="count">{cnt} 条</span>'
             f'<span class="arrow">→</span>'
             f'</a>\n'
         )
@@ -104,6 +115,31 @@ def _format_num(n: int | None) -> str:
     return str(n)
 
 
+def _format_age(published_at: str | None) -> str:
+    """将 ISO8601 发布时间转为「3天前」等相对时间标签，无时间返回空字符串。"""
+    if not published_at:
+        return ""
+    try:
+        from datetime import datetime, timezone
+        pub = datetime.fromisoformat(published_at)
+        if pub.tzinfo is None:
+            pub = pub.replace(tzinfo=timezone.utc)
+        delta = datetime.now(timezone.utc) - pub
+        hours = delta.total_seconds() / 3600
+        if hours < 1:
+            return "刚刚"
+        if hours < 24:
+            return f"{int(hours)}小时前"
+        days = int(hours / 24)
+        if days <= 7:
+            return f"{days}天前"
+        if days <= 30:
+            return f"{days // 7}周前"
+        return pub.strftime("%m/%d")
+    except Exception:
+        return ""
+
+
 def _safe_url(url: str) -> str:
     """过滤非 http(s) URL，防止 javascript: 注入。"""
     url = (url or "").strip()
@@ -134,8 +170,25 @@ def _render_card(v: dict) -> str:
     # 否则（抖音禁止 iframe）→ 点卡片外跳原站
     data_attr = f'data-embed="{embed}"' if embed else f'data-href="{page_url}"'
 
+    # 发布时间：计算相对标签和天数（用于筛选）
+    age_label = _format_age(v.get("published_at"))
+    try:
+        from datetime import datetime, timezone
+        pub = v.get("published_at")
+        if pub:
+            dt = datetime.fromisoformat(pub)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            age_days = (datetime.now(timezone.utc) - dt).days
+        else:
+            age_days = 9999
+    except Exception:
+        age_days = 9999
+
+    age_html = f'<span class="pub-age">{age_label}</span>' if age_label else ""
+
     return (
-        f'<div class="card" {data_attr} data-score="{score}" data-cat="{category}" data-platform="{platform}">'
+        f'<div class="card" {data_attr} data-score="{score}" data-cat="{category}" data-platform="{platform}" data-age="{age_days}">'
         f'<div class="thumb">'
         f'<img loading="lazy" referrerpolicy="no-referrer" src="{cover_url}" alt="{title}">'
         f'<span class="platform-icon">{platform_label}</span>'
@@ -146,7 +199,7 @@ def _render_card(v: dict) -> str:
         f'<div class="card-meta">'
         f'<span class="author">{author}</span>'
         f'<span class="stats">'
-        f'<span>▶ {_format_num(v.get("play_count"))}</span>'
+        f'{age_html}'
         f'<span>👍 {_format_num(v.get("like_count"))}</span>'
         f'</span>'
         f'</div>'
@@ -244,7 +297,7 @@ def generate(topic: str = "funny", min_score: int = 7, min_like_count: int = 0,
     archive_dir.mkdir(exist_ok=True)
     archive_file = archive_dir / f"{date_str}.html"
     archive_file.write_text(html, encoding="utf-8")
-    _update_archive_index(archive_dir, out)
+    _update_archive_index(archive_dir, out, date_str, len(videos))
     logger.info("generate_wall: 已存档 %s", archive_file)
 
     return out

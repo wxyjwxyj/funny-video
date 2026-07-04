@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -136,15 +137,25 @@ def _push_walls() -> None:
 def run_all(skip_collect: bool = False, skip_tag: bool = False) -> None:
     init_db(_DB)
     failed: list[str] = []
-    for topic_name in list_topics():
-        try:
-            run_pipeline(topic_name, skip_collect=skip_collect, skip_tag=skip_tag)
-        except Exception:
-            logger.exception("[%s] 链路异常，跳过继续", topic_name)
-            failed.append(topic_name)
+    topics = list_topics()
+
+    # 两个 topic 独立采集、打标签、生成，无共享状态，并行跑节省一半时间
+    # 注意：若多个 topic 同时用 CDP，偶发 tab 冲突时会降级（optional collector 不抛异常）
+    with ThreadPoolExecutor(max_workers=len(topics)) as pool:
+        fut_to_topic = {
+            pool.submit(run_pipeline, t, skip_collect=skip_collect, skip_tag=skip_tag): t
+            for t in topics
+        }
+        for future in as_completed(fut_to_topic):
+            t = fut_to_topic[future]
+            try:
+                future.result()
+            except Exception:
+                logger.exception("[%s] 链路异常，跳过继续", t)
+                failed.append(t)
+
     logger.info("==== 所有 topic 完成 ====")
     _push_walls()
-    # macOS 通知：成功/部分失败均告知
     if failed:
         _notify("搞笑视频墙 ⚠️", f"部分 topic 失败: {', '.join(failed)}")
     else:

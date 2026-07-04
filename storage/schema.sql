@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS videos (
     is_unsafe         INTEGER DEFAULT 0,     -- Claude 判定的不安全内容标记
     is_liked          INTEGER DEFAULT 0,    -- 个人标记：喜欢
     is_watched        INTEGER DEFAULT 0,    -- 个人标记：已看
+    published_at      TEXT,                 -- 视频在平台的发布时间（ISO8601），NULL=未知
     fetched_at        TEXT,
     created_at        TEXT
 );
@@ -33,4 +34,5 @@ CREATE INDEX IF NOT EXISTS idx_videos_topic      ON videos(topic);
 CREATE INDEX IF NOT EXISTS idx_videos_platform   ON videos(platform);
 CREATE INDEX IF NOT EXISTS idx_videos_funny       ON videos(funny_score);
 CREATE INDEX IF NOT EXISTS idx_videos_fetched     ON videos(fetched_at);
+CREATE INDEX IF NOT EXISTS idx_videos_published  ON videos(published_at);
 CREATE INDEX IF NOT EXISTS idx_videos_status      ON videos(status);

@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🤖 AI 视频墙</title>
+<style>
+:root {
+  --bg: #f7f8fc;
+  --surface: #ffffff;
+  --surface-2: #f3f4f8;
+  --surface-3: #ebedf2;
+  --border: #e8eaed;
+  --text: #1a1a2e;
+  --text-sub: #6b7280;
+  --text-muted: #9ca3af;
+  --accent: #fb7299;
+  --accent-dim: rgba(251,114,153,.12);
+  --bili: #fb7299;
+  --douyin: #fe2c55;
+  --xhs: #ff2442;
+  --radius: 12px;
+  --header-grad: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --shadow-card: 0 1px 3px rgba(0,0,0,.07), 0 2px 8px rgba(0,0,0,.05);
+  --shadow-hover: 0 8px 24px rgba(251,114,153,.18), 0 0 0 1px rgba(251,114,153,.15);
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: -apple-system, system-ui, sans-serif; min-height: 100vh; }
+
+/* ── Header ── */
+header {
+  position: sticky; top: 0; z-index: 40;
+  background: var(--header-grad);
+  border-bottom: none;
+  padding: 0 24px;
+  display: flex; align-items: center; gap: 14px; height: 54px;
+}
+.back-link {
+  color: rgba(255,255,255,.75); text-decoration: none;
+  font-size: 13px; display: flex; align-items: center; gap: 4px;
+  white-space: nowrap; flex-shrink: 0;
+}
+.back-link:hover { color: #fff; }
+.header-title { font-size: 16px; font-weight: 700; letter-spacing: -.01em; white-space: nowrap; color: #fff; }
+.header-stats {
+  margin-left: auto; display: flex; gap: 8px; align-items: center; flex-shrink: 0;
+}
+.stat-badge {
+  background: rgba(255,255,255,.18); border: 1px solid rgba(255,255,255,.25);
+  border-radius: 20px; padding: 3px 10px;
+  font-size: 12px; color: rgba(255,255,255,.9);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.update-time { font-size: 12px; color: rgba(255,255,255,.65); white-space: nowrap; }
+
+/* ── Filters ── */
+.filters {
+  position: sticky; top: 54px; z-index: 30;
+  background: rgba(247,248,252,.95);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 24px;
+  display: flex; gap: 6px; flex-wrap: wrap; align-items: center;
+}
+.filter-sep { width: 1px; height: 18px; background: var(--border); margin: 0 4px; flex-shrink: 0; }
+.filters button {
+  padding: 5px 13px; border-radius: 20px;
+  border: 1px solid var(--border);
+  background: transparent; color: var(--text-sub);
+  cursor: pointer; font-size: 13px; line-height: 1;
+  transition: all .15s; white-space: nowrap;
+}
+.filters button:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+.filters button.active {
+  background: var(--accent); border-color: var(--accent);
+  color: #fff; font-weight: 600;
+  box-shadow: 0 0 14px rgba(251,114,153,.35);
+}
+.filters button[data-platform="douyin"].active   { background: var(--douyin); border-color: var(--douyin); box-shadow: 0 0 14px rgba(254,44,85,.35); }
+.filters button[data-platform="xiaohongshu"].active { background: var(--xhs); border-color: var(--xhs); box-shadow: 0 0 14px rgba(255,36,66,.35); }
+
+/* ── Grid ── */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  padding: 20px 24px 56px;
+}
+
+/* ── Card ── */
+.card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform .2s cubic-bezier(.34,1.3,.64,1), box-shadow .2s;
+  box-shadow: var(--shadow-card);
+  border: none;
+  position: relative;
+  display: flex; flex-direction: column;
+}
+.card:hover {
+  transform: translateY(-5px);
+  box-shadow: var(--shadow-hover);
+}
+/* 平台色条 */
+.card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0;
+  height: 3px; z-index: 2;
+  background: var(--border);
+}
+.card[data-platform="bilibili"]::before { background: var(--bili); }
+.card[data-platform="douyin"]::before   { background: var(--douyin); }
+.card[data-platform="xiaohongshu"]::before { background: var(--xhs); }
+
+/* 缩略图 */
+.thumb {
+  position: relative; width: 100%;
+  aspect-ratio: 16/9; background: var(--surface-3);
+  overflow: hidden;
+}
+.thumb img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  transition: transform .35s cubic-bezier(.25,.46,.45,.94);
+}
+.card:hover .thumb img { transform: scale(1.06); }
+
+/* 左上角平台角标 */
+.platform-icon {
+  position: absolute; top: 8px; left: 8px; z-index: 3;
+  background: rgba(255,255,255,.9);
+  backdrop-filter: blur(4px);
+  border-radius: 6px; padding: 2px 7px;
+  font-size: 11px; font-weight: 600; color: var(--text-sub);
+}
+.card[data-platform="bilibili"] .platform-icon { color: var(--bili); }
+.card[data-platform="douyin"] .platform-icon   { color: var(--douyin); }
+.card[data-platform="xiaohongshu"] .platform-icon { color: var(--xhs); }
+
+/* 右下角评分徽章 */
+.score-badge {
+  position: absolute; bottom: 8px; right: 8px; z-index: 3;
+  background: rgba(255,255,255,.9);
+  backdrop-filter: blur(4px);
+  border-radius: 8px; padding: 3px 8px;
+  font-size: 12px; font-weight: 700;
+  display: flex; align-items: center; gap: 3px;
+}
+.score-badge.s9 { color: #fbbf24; }
+.score-badge.s8 { color: #4ade80; }
+.score-badge.s7 { color: var(--text-sub); }
+
+/* 卡片内容 */
+.card-body { padding: 12px 13px 13px; flex: 1; display: flex; flex-direction: column; gap: 7px; }
+.title {
+  font-size: 14px; font-weight: 500; line-height: 1.45; color: var(--text);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.card-meta {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; color: var(--text-muted);
+}
+.author { color: var(--text-sub); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
+.stats { display: flex; gap: 8px; flex-shrink: 0; }
+.tags { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 2px; }
+.tag {
+  background: var(--surface-2); border: 1px solid var(--border);
+  padding: 2px 8px; border-radius: 6px;
+  color: var(--text-sub); font-size: 11px;
+}
+
+/* ── 空状态 ── */
+.empty {
+  display: none; grid-column: 1/-1;
+  text-align: center; padding: 80px 24px; color: var(--text-muted);
+}
+.empty .icon { font-size: 48px; margin-bottom: 12px; }
+.empty p { font-size: 15px; }
+
+/* ── 播放弹窗 ── */
+.play-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.88);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 100;
+  animation: overlay-in .18s ease;
+}
+.play-overlay.hidden { display: none; }
+@keyframes overlay-in { from { opacity: 0; } to { opacity: 1; } }
+
+.player-wrap {
+  width: min(900px, 94vw);
+  animation: player-in .22s cubic-bezier(.34,1.3,.64,1);
+}
+@keyframes player-in { from { transform: scale(.93); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.player-aspect { aspect-ratio: 16/9; }
+.player-aspect iframe { width: 100%; height: 100%; border: none; border-radius: 10px; box-shadow: 0 24px 80px rgba(0,0,0,.8); }
+
+.player-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 2px 0; gap: 12px;
+}
+.player-title {
+  font-size: 14px; color: rgba(255,255,255,.7);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.close-btn {
+  width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
+  background: rgba(255,255,255,.1); border: none;
+  color: #fff; font-size: 16px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background .15s;
+}
+.close-btn:hover { background: rgba(255,255,255,.22); }
+</style>
+</head>
+<body>
+<header>
+  <a href="index.html" class="back-link">← 首页</a>
+  <span class="header-title">🤖 AI 视频墙</span>
+  <div class="header-stats">
+    <span class="stat-badge">2026-07-04</span>
+    <span class="stat-badge">33 条</span>
+    <span class="update-time">更新 2026-07-04 08:03:06</span>
+  </div>
+</header>
+<div class="filters" id="filters">
+  <button class="active" data-min="0">全部</button>
+  <button data-min="7">7+ 分</button>
+  <button data-min="9">✨ 精选</button>
+  <div class="filter-sep"></div>
+  <button data-platform="bilibili">B站</button><button data-platform="douyin">抖音</button><button data-platform="xiaohongshu">小红书</button>
+  <div class="filter-sep"></div>
+  
+</div>
+<div class="grid" id="grid">
+  <div class="card" data-href="https://www.xiaohongshu.com/search_result/68af28f3000000001d000fd8?xsec_token=ABMqrMXlXax2FRD6xAtzb7MBGbGEqzCEJK1qoTsjbDjjM=&amp;xsec_source=" data-score="9" data-cat="" data-platform="xiaohongshu"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://sns-webpic-qc.xhscdn.com/202607040802/a611eec22f3307798d2191c07154fdac/spectrum/1040g34o31lmnv2kl4s005ppo5gb73f850hbcfh8!nc_n_webp_prv_1" alt="利用AI制作短视频全流程|喂饭级教程"><span class="platform-icon">小红书</span><span class="score-badge s9">🤖 9</span></div><div class="card-body"><div class="title">利用AI制作短视频全流程|喂饭级教程</div><div class="card-meta"><span class="author"></span><span class="stats"><span>▶ ?</span><span>👍 3848</span></span></div><div class="tags"><span class="tag">AI教程</span><span class="tag">短视频制作</span><span class="tag">AI工作流</span></div></div></div>
+<div class="card" data-href="https://www.xiaohongshu.com/search_result/67976f24000000001701df36?xsec_token=ABtrVmNZVj_M-Is1Y43lyygrTmysF-w4eH0DGR2hruO6M=&amp;xsec_source=" data-score="9" data-cat="" data-platform="xiaohongshu"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://sns-webpic-qc.xhscdn.com/202607040802/d7763bf8c513ed1735cf912942c54b22/1040g2sg31d5ihujqgu705oqu431m5hav38e8mmg!nc_n_webp_prv_1" alt="DeepSeek梁文锋专访"><span class="platform-icon">小红书</span><span class="score-badge s9">🤖 9</span></div><div class="card-body"><div class="title">DeepSeek梁文锋专访</div><div class="card-meta"><span class="author"></span><span class="stats"><span>▶ ?</span><span>👍 7631</span></span></div><div class="tags"><span class="tag">梁文锋</span><span class="tag">DeepSeek</span><span class="tag">创始人访谈</span></div></div></div>
+<div class="card" data-href="https://www.xiaohongshu.com/search_result/6a3fad31000000001101cbfb?xsec_token=ABp5MGJJLPXyohcpJVC1G7fUpUI3G_jQKXPzn0jmsq9yA=&amp;xsec_source=" data-score="9" data-cat="" data-platform="xiaohongshu"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://sns-webpic-qc.xhscdn.com/202607040802/9542e31f84f58745b0fcd62aad34c5fa/spectrum/1040g34o321ts0on4ms305qholl93nk009jh3tb8!nc_n_webp_prv_1" alt="刚刚，DeepSeek发布了DSpark"><span class="platform-icon">小红书</span><span class="score-badge s9">🤖 9</span></div><div class="card-body"><div class="title">刚刚，DeepSeek发布了DSpark</div><div class="card-meta"><span class="author"></span><span class="stats"><span>▶ ?</span><span>👍 4711</span></span></div><div class="tags"><span class="tag">DeepSeek</span><span class="tag">AI新闻</span><span class="tag">DSpark</span></div></div></div>
+<div class="card" data-href="https://www.xiaohongshu.com/search_result/69bc0de500000000230218e3?xsec_token=AB3UKGfeF6rtwoMOtXcIMJgtDsyA7KjU8hi9jNDIAhawo=&amp;xsec_source=" data-score="9" data-cat="" data-platform="xiaohongshu"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://sns-webpic-qc.xhscdn.com/202607040801/3b2ffd1a549912fa0c6a2e1348eae8db/notes_pre_post/1040g3k831ttas44vha705q8piu1sjtsfvpk5lq8!nc_n_webp_prv_1" alt="Claude 终极新手指南（2026年3月）"><span class="platform-icon">小红书</span><span class="score-badge s9">🤖 9</span></div><div class="card-body"><div class="title">Claude 终极新手指南（2026年3月）</div><div class="card-meta"><span class="author"></span><span class="stats"><span>▶ ?</span><span>👍 8028</span></span></div><div class="tags"><span class="tag">Claude</span><span class="tag">新手指南</span><span class="tag">Prompt技巧</span></div></div></div>
+<div class="card" data-href="https://www.xiaohongshu.com/search_result/69fde2da000000001a035a7d?xsec_token=ABu9ddgyLasIXlpbi3Fsrdo48xpPcb3xWrtMboZxcbbDo=&amp;xsec_source=" data-score="9" data-cat="" data-platform="xiaohongshu"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://sns-webpic-qc.xhscdn.com/202607040801/d1969ef72220e5661cd6aca7e40a48ef/spectrum/1040g34o31vtji112l60g5par4dli01avrd8n4ng!nc_n_webp_prv_1" alt="如何利用一个周末掌握Claude Code"><span class="platform-icon">小红书</span><span class="score-badge s9">🤖 9</span></div><div class="card-body"><div class="title">如何利用一个周末掌握Claude Code</div><div class="card-meta"><span class="author"></span><span class="stats"><span>▶ ?</span><span>👍 11.6万</span></span></div><div class="tags"><span class="tag">Claude Code</span><span class="tag">AI编程助手</span><span class="tag">开发工具</span></div></div></div>
+<div class="card" data-href="https://www.xiaohongshu.com/search_result/69c0032400000000210137c2?xsec_token=ABKgzbqp4L18wIAw2PebyT9OXch91n04kilKY7ibgZydI=&amp;xsec_source=" data-score="8" data-cat="" data-platform="xiaohongshu"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://sns-webpic-qc.xhscdn.com/202607040802/44aa47de84423e7e0b7e02ac33fb332a/spectrum/1040g34o31u15ubluhae05n7vja8m581oh4l9meg!nc_n_webp_prv_1" alt="用banana pro和可灵做AI短片～步骤分享"><span class="platform-icon">小红书</span><span class="score-badge s8">🤖 8</span></div><div class="card-body"><div class="title">用banana pro和可灵做AI短片～步骤分享</div><div class="card-meta"><span class="author"></span><span class="stats"><span>▶ ?</span><span>👍 4008</span></span></div><div class="tags"><span class="tag">AI短片</span><span class="tag">可灵AI</span><span class="tag">Banana Pro</span></div></div></div>
+<div class="card" data-href="https://www.xiaohongshu.com/search_result/6807aa3f000000001e003f2a?xsec_token=ABHhcTQkhrWG0aV11R9iMMho8Oi1_-PqeSLpcaLjqzDOM=&amp;xsec_source=" data-score="8" data-cat="" data-platform="xiaohongshu"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://sns-webpic-qc.xhscdn.com/202607040802/351fc7b29d3904133d372e6efc621e32/spectrum/1040g34o31gj5m0e8ja305ogvg4u8ct39p94f5vo!nc_n_webp_prv_1" alt="可灵AI不好用？那是你不知道这些镜头语言！"><span class="platform-icon">小红书</span><span class="score-badge s8">🤖 8</span></div><div class="card-body"><div class="title">可灵AI不好用？那是你不知道这些镜头语言！</div><div class="card-meta"><span class="author"></span><span class="stats"><span>▶ ?</span><span>👍 2015</span></span></div><div class="tags"><span class="tag">可灵AI</span><span class="tag">镜头语言</span><span class="tag">AI视频技巧</span></div></div></div>
+<div class="card" data-href="https://www.xiaohongshu.com/search_result/692ea072000000001e03aa22?xsec_token=ABPtRBxfM6Q2xUgcItWn1s1dMfTL5C66Lqgq464FXd0tA=&amp;xsec_source=" data-score="8" data-cat="" data-platform="xiaohongshu"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://sns-webpic-qc.xhscdn.com/202607040802/92cba407166798389dbfdd0cc30ee4b5/spectrum/1040g34o31pj75f8h3qa0492emfsarkbvngbi5ng!nc_n_webp_prv_1" alt="🍌 Nano Banana Pro 喂饭级教程！"><span class="platform-icon">小红书</span><span class="score-badge s8">🤖 8</span></div><div class="card-body"><div class="title">🍌 Nano Banana Pro 喂饭级教程！</div><div class="card-meta"><span class="author"></span><span class="stats"><span>▶ ?</span><span>👍 3476</span></span></div><div class="tags"><span class="tag">Nano Banana Pro</span><span class="tag">硬件教程</span><span class="tag">开发板</span></div></div></div>
+<div class="card" data-href="https://www.xiaohongshu.com/search_result/6a1e4b9a000000002202a72a?xsec_token=ABiDg0H4bFLcnnqqQOY0vKeXDhBkC5dHSqOiyCbuMoTPA=&amp;xsec_source=" data-score="8" data-cat="" data-platform="xiaohongshu"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://sns-webpic-qc.xhscdn.com/202607040802/85518a3a74807482d891826cc461697c/spectrum/1040g34o320t8ra9mn2d04bfufp8l9kufceucq3g!nc_n_webp_prv_1" alt="AI绘图50种风格｜绘图再也不用瞎找关键词"><span class="platform-icon">小红书</span><span class="score-badge s8">🤖 8</span></div><div class="card-body"><div class="title">AI绘图50种风格｜绘图再也不用瞎找关键词</div><div class="card-meta"><span class="author"></span><span class="stats"><span>▶ ?</span><span>👍 2019</span></span></div><div class="tags"><span class="tag">AI绘图风格</span><span class="tag">关键词整理</span><span class="tag">AI绘画</span></div></div></div>
+<div class="card" data-href="https://www.xiaohongshu.com/search_result/68be9fc6000000001d03b79e?xsec_token=ABT5b9LniyWig8qTh_wnhfXYM7T0tIkDF-MXERF4uc37o=&amp;xsec_source=" data-score="8" data-cat="" data-platform="xiaohongshu"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://sns-webpic-qc.xhscdn.com/202607040801/b52266d61e116c5d9172f4dcf8fee448/1040g00831m5doqellm4g5n9f87vkh1qlkg2jdn0!nc_n_webp_prv_1" alt="期待已久的 AIGC 视频开头制作教程来了"><span class="platform-icon">小红书</span><span class="score-badge s8">🤖 8</span></div><div class="card-body"><div class="title">期待已久的 AIGC 视频开头制作教程来了</div><div class="card-meta"><span class="author"></span><span class="stats"><span>▶ ?</span><span>👍 9646</span></span></div><div class="tags"><span class="tag">AIGC视频</span><span class="tag">视频制作</span><span class="tag">教程</span></div></div></div>
+<div class="card" data-href="https://www.xiaohongshu.com/search_result/69fc3dbd000000003701c6a6?xsec_token=ABoIww9pb4TZT_LazzxXM-AptOM-r41OJ-J1PlxijFo54=&amp;xsec_source=" data-score="8" data-cat="" data-platform="xiaohongshu"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://sns-webpic-qc.xhscdn.com/202607040801/2359b3bfa517f72d48ea389a5aa23b77/spectrum/1040g34o31vs0jg5l48cg5q4mofnq99qr6p7t458!nc_n_webp_prv_1" alt="AI的七层关系，你搞懂了几层？"><span class="platform-icon">小红书</span><span class="score-badge s8">🤖 8</span></div><div class="card-body"><div class="title">AI的七层关系，你搞懂了几层？</div><div class="card-meta"><span class="author"></span><span class="stats"><span>▶ ?</span><span>👍 3605</span></span></div><div class="tags"><span class="tag">AI理论</span><span class="tag">技术框架</span><span class="tag">概念解析</span></div></div></div>
+<div class="card" data-href="https://www.xiaohongshu.com/search_result/69f0bb7100000000350316e9?xsec_token=ABs_tLwjaTnaF5K-zxTHeRK0FBvK01NmazNYnzyv-c18o=&amp;xsec_source=" data-score="8" data-cat="" data-platform="xiaohongshu"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://sns-webpic-qc.xhscdn.com/202607040801/2437a6b4bb450afdc5c22fcdea73ea74/spectrum/1040g34o31vgp2i0kk8105q4mofnq99qrjm0baj0!nc_n_webp_prv_1" alt="AI的七层关系，你搞懂了几层？"><span class="platform-icon">小红书</span><span class="score-badge s8">🤖 8</span></div><div class="card-body"><div class="title">AI的七层关系，你搞懂了几层？</div><div class="card-meta"><span class="author"></span><span class="stats"><span>▶ ?</span><span>👍 7072</span></span></div><div class="tags"><span class="tag">AI理论</span><span class="tag">技术框架</span><span class="tag">概念解析</span></div></div></div>
+<div class="card" data-href="https://www.xiaohongshu.com/search_result/6a37ce950000000015025431?xsec_token=ABKvC9AFRbn4RX4WC3TjpdvwVIWP5inYLjaJNK2drUZS0=&amp;xsec_source=" data-score="8" data-cat="" data-platform="xiaohongshu"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://sns-webpic-qc.xhscdn.com/202607040801/1082b349780c268ba37a9bd2fc57be81/spectrum/1040g0k0321m6381cmu005n2lh07kgj8kj85rd48!nc_n_webp_prv_1" alt="纯干货！手把手教你免费用Claude Code！"><span class="platform-icon">小红书</span><span class="score-badge s8">🤖 8</span></div><div class="card-body"><div class="title">纯干货！手把手教你免费用Claude Code！</div><div class="card-meta"><span class="author"></span><span class="stats"><span>▶ ?</span><span>👍 1.0万</span></span></div><div class="tags"><span class="tag">Claude Code</span><span class="tag">免费使用</span><span class="tag">干货教程</span></div></div></div>
+<div class="card" data-href="https://www.xiaohongshu.com/search_result/6a44412a0000000008031b01?xsec_token=ABXe1wwuBzD_ot9ItErL4CHXVvX6qhfHl1FVKVeZUUZPc=&amp;xsec_source=" data-score="8" data-cat="" data-platform="xiaohongshu"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://sns-webpic-qc.xhscdn.com/202607040801/9023f2fd0251c71768b67938629b4eb0/spectrum/1040g34o3222b3v2kms605o0o0kvgbkeka176irg!nc_n_webp_prv_1" alt="科研人狂喜！Claude Science 测试版发布了"><span class="platform-icon">小红书</span><span class="score-badge s8">🤖 8</span></div><div class="card-body"><div class="title">科研人狂喜！Claude Science 测试版发布了</div><div class="card-meta"><span class="author"></span><span class="stats"><span>▶ ?</span><span>👍 1592</span></span></div><div class="tags"><span class="tag">Claude</span><span class="tag">AI科研</span><span class="tag">Science版</span></div></div></div>
+<div class="card" data-href="https://www.xiaohongshu.com/search_result/682ff6de000000002001c486?xsec_token=ABIVcP80z-bUrROQrSAfTwJwcZwgLzoNVtUUCAHw9dEVA=&amp;xsec_source=" data-score="7" data-cat="" data-platform="xiaohongshu"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://sns-webpic-qc.xhscdn.com/202607040802/68cd87bc9f40b1acb0de5eebf1856d4b/notes_pre_post/1040g3k031hqh1f9vjs105n9emmek0ms6a7tju30!nc_n_webp_prv_1" alt="chatgpt10个天花板级别Prompt工作效率翻倍"><span class="platform-icon">小红书</span><span class="score-badge s7">🤖 7</span></div><div class="card-body"><div class="title">chatgpt10个天花板级别Prompt工作效率翻倍</div><div class="card-meta"><span class="author"></span><span class="stats"><span>▶ ?</span><span>👍 2562</span></span></div><div class="tags"><span class="tag">Prompt工程</span><span class="tag">工作效率</span><span class="tag">ChatGPT高级用法</span></div></div></div>
+<div class="card" data-href="https://www.xiaohongshu.com/search_result/6896f951000000002502a4c4?xsec_token=ABMTB39FxDw8a7DZvwg-pdcvqJEK1sIlUfOG4oXPQwM9I=&amp;xsec_source=" data-score="7" data-cat="" data-platform="xiaohongshu"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://sns-webpic-qc.xhscdn.com/202607040802/5d3ca374151c98f2011726ac47a27bdb/spectrum/1040g0k031kv3hp263q005p8k8migi25nb1drp5g!nc_n_webp_prv_1" alt="11句Prompt逼出ChatGPT诚实回答"><span class="platform-icon">小红书</span><span class="score-badge s7">🤖 7</span></div><div class="card-body"><div class="title">11句Prompt逼出ChatGPT诚实回答</div><div class="card-meta"><span class="author"></span><span class="stats"><span>▶ ?</span><span>👍 5799</span></span></div><div class="tags"><span class="tag">ChatGPT诚实回答</span><span class="tag">提示词技巧</span><span class="tag">AI使用技巧</span></div></div></div>
+<div class="card" data-href="https://www.xiaohongshu.com/search_result/69eab722000000001f031801?xsec_token=AByfsjbcmDEuAN8GgBauok40C9jumyyMAEePMhgrmMzoY=&amp;xsec_source=" data-score="7" data-cat="" data-platform="xiaohongshu"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://sns-webpic-qc.xhscdn.com/202607040802/772130be05cb8f2c6987992ba20f9626/1040g2sg31va2rgicir005nqbbv3g8hmi96l6ujg!nc_n_webp_prv_1" alt="GPT-image2&amp;Nanobanana&amp;Midjourney大PK!"><span class="platform-icon">小红书</span><span class="score-badge s7">🤖 7</span></div><div class="card-body"><div class="title">GPT-image2&amp;Nanobanana&amp;Midjourney大PK!</div><div class="card-meta"><span class="author"></span><span class="stats"><span>▶ ?</span><span>👍 1613</span></span></div><div class="tags"><span class="tag">GPT-image2</span><span class="tag">Midjourney对比</span><span class="tag">AI绘图工具</span></div></div></div>
+<div class="card" data-href="https://www.xiaohongshu.com/search_result/6a03e060000000003502e969?xsec_token=ABkIxRMbgjludcWqkdwLBrwNJTe1xKyQ7sKopnDqe2Ywc=&amp;xsec_source=" data-score="7" data-cat="" data-platform="xiaohongshu"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://sns-webpic-qc.xhscdn.com/202607040802/f8c09ef5b64bc60eb1b65a80355b4681/notes_pre_post/1040g3k83203f6f0vl4d05qba8chcl0nmhcnpss0!nc_n_webp_prv_1" alt="吃透 AI 提示词🔥新手秒变大佬的万能公式"><span class="platform-icon">小红书</span><span class="score-badge s7">🤖 7</span></div><div class="card-body"><div class="title">吃透 AI 提示词🔥新手秒变大佬的万能公式</div><div class="card-meta"><span class="author"></span><span class="stats"><span>▶ ?</span><span>👍 3434</span></span></div><div class="tags"><span class="tag">AI提示词公式</span><span class="tag">新手进阶</span><span class="tag">万能模板</span></div></div></div>
+<div class="card" data-href="https://www.xiaohongshu.com/search_result/6880b351000000000b01c2db?xsec_token=ABcMyXq0aVvsYoKSnoC6NVq6k57L8Jtc2QOQ9VWafIYaI=&amp;xsec_source=" data-score="7" data-cat="" data-platform="xiaohongshu"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://sns-webpic-qc.xhscdn.com/202607040801/fdd5c18a15e1a3f50f79a1294ba09a80/1040g2sg31k9c44o02ae05pjeua00u96o4gvq73o!nc_n_webp_prv_1" alt="码住🔥即梦绘图提示词，直接拿去抄‼"><span class="platform-icon">小红书</span><span class="score-badge s7">🤖 7</span></div><div class="card-body"><div class="title">码住🔥即梦绘图提示词，直接拿去抄‼</div><div class="card-meta"><span class="author"></span><span class="stats"><span>▶ ?</span><span>👍 1168</span></span></div><div class="tags"><span class="tag">即梦AI</span><span class="tag">提示词</span><span class="tag">AI绘画技巧</span></div></div></div>
+<div class="card" data-href="https://www.xiaohongshu.com/search_result/6a339094000000001700a312?xsec_token=ABvEJk4_QQvPUwGSJ4E_fHNTaQIaWi7q8p_Lwc9xRjmoA=&amp;xsec_source=" data-score="7" data-cat="" data-platform="xiaohongshu"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://sns-webpic-qc.xhscdn.com/202607040801/124143b60aa78469e74cfea1126ef610/notes_pre_post/1040g3k8321i1jtod7a505pjui3q3cvu7h1h84og!nc_n_webp_prv_1" alt="《芥子须弥》概念设计丨通天浮屠"><span class="platform-icon">小红书</span><span class="score-badge s7">🤖 7</span></div><div class="card-body"><div class="title">《芥子须弥》概念设计丨通天浮屠</div><div class="card-meta"><span class="author"></span><span class="stats"><span>▶ ?</span><span>👍 1560</span></span></div><div class="tags"><span class="tag">AI绘画</span><span class="tag">概念设计</span><span class="tag">数字艺术</span></div></div></div>
+<div class="card" data-href="https://www.xiaohongshu.com/search_result/698b33c5000000001b01d387?xsec_token=AB1vC8-6g_j8VNBgVUamMwN3yo22nT7IhLJf7Zy_pdSr4=&amp;xsec_source=" data-score="7" data-cat="" data-platform="xiaohongshu"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://sns-webpic-qc.xhscdn.com/202607040801/2af29be3d9c8c3fd75c2de026e0001eb/notes_pre_post/1040g3k831sdk4id45m705nr49aeg8u69dfg2a2g!nc_n_webp_prv_1" alt="每天认识一个 AI 产品 11｜Claude"><span class="platform-icon">小红书</span><span class="score-badge s7">🤖 7</span></div><div class="card-body"><div class="title">每天认识一个 AI 产品 11｜Claude</div><div class="card-meta"><span class="author"></span><span class="stats"><span>▶ ?</span><span>👍 2691</span></span></div><div class="tags"><span class="tag">Claude</span><span class="tag">AI产品</span><span class="tag">AI介绍</span></div></div></div>
+<div class="card" data-href="https://www.douyin.com/video/7657486297539349823" data-score="7" data-cat="" data-platform="douyin"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://p3-pc-sign.douyinpic.com/image-cut-tos-priv/c09551a790b1036db5f1c959f104459c~tplv-dy-resize-origshort-autoq-75:330.jpeg?lk3s=138a59ce&amp;x-expires=2098483200&amp;x-signature=yFqKvQk6q35Mu7nOLeGYgL7jJy0%3D&amp;from=327834062&amp;s=PackSourceEnum_SEARCH&amp;se=false&amp;sc=cover&amp;biz_tag=pcweb_cover&amp;l=2026070408012789A950D3B2EC1FF99F50" alt="面向科学家的AI工作台Claude Science ！ #科技 #ai  #claude  #研究生日常"><span class="platform-icon">抖音</span><span class="score-badge s7">🤖 7</span></div><div class="card-body"><div class="title">面向科学家的AI工作台Claude Science ！ #科技 #ai  #claude  #研究生日常</div><div class="card-meta"><span class="author">算力炼丹炉</span><span class="stats"><span>▶ 0</span><span>👍 1.8万</span></span></div><div class="tags"><span class="tag">Claude Science</span><span class="tag">科学研究</span><span class="tag">AI工具</span></div></div></div>
+<div class="card" data-href="https://www.douyin.com/video/7657804010551807267" data-score="7" data-cat="" data-platform="douyin"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://p3-pc-sign.douyinpic.com/image-cut-tos-priv/4c9d8a8145d565203452892411ed2bfc~tplv-dy-resize-origshort-autoq-75:330.jpeg?lk3s=138a59ce&amp;x-expires=2098483200&amp;x-signature=gwQrt7EwIz1EZJlNqBQatrSZTUY%3D&amp;from=327834062&amp;s=PackSourceEnum_SEARCH&amp;se=false&amp;sc=cover&amp;biz_tag=pcweb_cover&amp;l=2026070408012789A950D3B2EC1FF99F50" alt="今天扒一下网上疯传的claude code恶意代码 #ai新星计划  #抖音前沿科技首发计划  #claudecode"><span class="platform-icon">抖音</span><span class="score-badge s7">🤖 7</span></div><div class="card-body"><div class="title">今天扒一下网上疯传的claude code恶意代码 #ai新星计划  #抖音前沿科技首发计划  #claudecode</div><div class="card-meta"><span class="author">创野小朱</span><span class="stats"><span>▶ 0</span><span>👍 1.0万</span></span></div><div class="tags"><span class="tag">Claude Code</span><span class="tag">代码安全</span><span class="tag">恶意代码</span></div></div></div>
+<div class="card" data-href="https://www.xiaohongshu.com/search_result/68f0f347000000000302de0e?xsec_token=ABwx5Mridr_dW5S9yBRVHK6tGkl1soDfTbp1IzCciiKwI=&amp;xsec_source=" data-score="6" data-cat="" data-platform="xiaohongshu"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://sns-webpic-qc.xhscdn.com/202607040802/4fd47105c9c10f9c9a72f7785d243d2d/spectrum/1040g34o31nmvlon54q0g5nd2jp2g8vteh0reo50!nc_n_webp_prv_1" alt="10种实用的Chatgpt用法 （小白入门篇）"><span class="platform-icon">小红书</span><span class="score-badge s7">🤖 6</span></div><div class="card-body"><div class="title">10种实用的Chatgpt用法 （小白入门篇）</div><div class="card-meta"><span class="author"></span><span class="stats"><span>▶ ?</span><span>👍 1.4万</span></span></div><div class="tags"><span class="tag">ChatGPT入门</span><span class="tag">AI使用技巧</span><span class="tag">实用教程</span></div></div></div>
+<div class="card" data-href="https://www.xiaohongshu.com/search_result/6a27dbc6000000001702e96f?xsec_token=ABaec2NhLKSyALei4GMi6sVQxnOEwpnyRqSOF2HGBdgSE=&amp;xsec_source=" data-score="6" data-cat="" data-platform="xiaohongshu"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://sns-webpic-qc.xhscdn.com/202607040802/e4dbda30bd37c7262375421824cde954/1040g2sg3216gh7tc6udg5pup79minpasnplrmpo!nc_n_webp_prv_1" alt="GPT-Image-2到底怎么用🤔"><span class="platform-icon">小红书</span><span class="score-badge s7">🤖 6</span></div><div class="card-body"><div class="title">GPT-Image-2到底怎么用🤔</div><div class="card-meta"><span class="author"></span><span class="stats"><span>▶ ?</span><span>👍 1471</span></span></div><div class="tags"><span class="tag">GPT图像生成</span><span class="tag">AI绘画工具</span><span class="tag">图像处理</span></div></div></div>
+<div class="card" data-href="https://www.xiaohongshu.com/search_result/6a280498000000001702e776?xsec_token=ABjXJURQACqD92we6VvwRQWPjhneBmyKiyLkVyXkPyHaU=&amp;xsec_source=" data-score="6" data-cat="" data-platform="xiaohongshu"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://sns-webpic-qc.xhscdn.com/202607040802/bad05cc2a620166e50dbd6d72f8a196b/1040g2sg3216n208jn2eg5n945bbk7us0quj5deg!nc_n_webp_prv_1" alt="打工人必看！这些AI工具让我少加班三小时"><span class="platform-icon">小红书</span><span class="score-badge s7">🤖 6</span></div><div class="card-body"><div class="title">打工人必看！这些AI工具让我少加班三小时</div><div class="card-meta"><span class="author"></span><span class="stats"><span>▶ ?</span><span>👍 7695</span></span></div><div class="tags"><span class="tag">AI工具</span><span class="tag">办公效率</span><span class="tag">打工人</span></div></div></div>
+<div class="card" data-href="https://www.xiaohongshu.com/search_result/6a2585c90000000035030436?xsec_token=ABG7gusuLIuZHtFUEca8RyTA1aMjdUegwnUlvSn-jGAp8=&amp;xsec_source=" data-score="6" data-cat="" data-platform="xiaohongshu"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://sns-webpic-qc.xhscdn.com/202607040802/ac7024f2ba1a00a5aa57ace70e441af6/notes_pre_post/1040g3k83214apk2jn2705p81pvrln6cupfeu2j0!nc_n_webp_prv_1" alt="靠AI视频赚钱的人，换了一拨又一波…"><span class="platform-icon">小红书</span><span class="score-badge s7">🤖 6</span></div><div class="card-body"><div class="title">靠AI视频赚钱的人，换了一拨又一波…</div><div class="card-meta"><span class="author"></span><span class="stats"><span>▶ ?</span><span>👍 1282</span></span></div><div class="tags"><span class="tag">AI赚钱</span><span class="tag">行业分析</span><span class="tag">AI视频</span></div></div></div>
+<div class="card" data-href="https://www.xiaohongshu.com/search_result/6822c48e0000000012005cba?xsec_token=ABCgnG7h5aLDXjE6Q2BTJVh_V0FmOV2z-nACAKnoqx0ts=&amp;xsec_source=" data-score="6" data-cat="" data-platform="xiaohongshu"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://sns-webpic-qc.xhscdn.com/202607040801/42f65f922eb1b2f15093c8b893be3381/spectrum/1040g34o31hdklv97j85g5ohtcmf416gv40n7mt0!nc_n_webp_prv_1" alt="即梦直出美陈  附咒语"><span class="platform-icon">小红书</span><span class="score-badge s7">🤖 6</span></div><div class="card-body"><div class="title">即梦直出美陈  附咒语</div><div class="card-meta"><span class="author"></span><span class="stats"><span>▶ ?</span><span>👍 8860</span></span></div><div class="tags"><span class="tag">即梦AI</span><span class="tag">AI绘画</span><span class="tag">美陈设计</span></div></div></div>
+<div class="card" data-href="https://www.xiaohongshu.com/search_result/69f17376000000001f002efc?xsec_token=ABLS_oR0LHPyTj4c5Czgr7F5g8Th5Q9IRHrVXiyAYqI1A=&amp;xsec_source=" data-score="6" data-cat="" data-platform="xiaohongshu"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://sns-webpic-qc.xhscdn.com/202607040801/3a29c8d16a2809abb5b5c25f9547b532/1040g00831vhfidkr2i6g5qa7cu7toqi886epid0!nc_n_webp_prv_1" alt="给博士普及下Claude的正确用法"><span class="platform-icon">小红书</span><span class="score-badge s7">🤖 6</span></div><div class="card-body"><div class="title">给博士普及下Claude的正确用法</div><div class="card-meta"><span class="author"></span><span class="stats"><span>▶ ?</span><span>👍 3302</span></span></div><div class="tags"><span class="tag">Claude使用方法</span><span class="tag">AI工具教程</span><span class="tag">AI助手</span></div></div></div>
+<div class="card" data-href="https://www.xiaohongshu.com/search_result/69f74896000000003601bc19?xsec_token=ABjcPpdS5RYew2wrGHBICMjk3Fp9oLYPCSsYNjWj8cT5o=&amp;xsec_source=" data-score="6" data-cat="" data-platform="xiaohongshu"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://sns-webpic-qc.xhscdn.com/202607040801/d69fc418e5b5308c200ee19acefe76ea/spectrum/1040g34o31vn5q29ujm305q4mofnq99qr2apfoeo!nc_n_webp_prv_1" alt="我的 Claude 文件结构"><span class="platform-icon">小红书</span><span class="score-badge s7">🤖 6</span></div><div class="card-body"><div class="title">我的 Claude 文件结构</div><div class="card-meta"><span class="author"></span><span class="stats"><span>▶ ?</span><span>👍 3615</span></span></div><div class="tags"><span class="tag">Claude</span><span class="tag">文件管理</span><span class="tag">AI工具</span></div></div></div>
+<div class="card" data-href="https://www.douyin.com/video/7657501271767691499" data-score="6" data-cat="" data-platform="douyin"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://p3-pc-sign.douyinpic.com/tos-cn-i-0813c001/oYjQxAfyNRQAY09CAHgiItFEAfA3AqJYDuAOCu~noop.jpeg?lk3s=138a59ce&amp;x-expires=1784332800&amp;x-signature=8V%2F%2F5YvgRRGcU1dwAga53mmSb5A%3D&amp;from=327834062&amp;s=PackSourceEnum_SEARCH&amp;se=false&amp;biz_tag=pcweb_cover&amp;l=2026070408012789A950D3B2EC1FF99F50" alt="AI 时代 考试可能真的要变了。#人工智能大学 #ai时代计算机专业趋势 #ai学科 #ai大学 #大学教育改革"><span class="platform-icon">抖音</span><span class="score-badge s7">🤖 6</span></div><div class="card-body"><div class="title">AI 时代 考试可能真的要变了。#人工智能大学 #ai时代计算机专业趋势 #ai学科 #ai大学 #大学教育改革</div><div class="card-meta"><span class="author">仔仔/</span><span class="stats"><span>▶ 0</span><span>👍 5291</span></span></div><div class="tags"><span class="tag">AI时代</span><span class="tag">考试变革</span><span class="tag">大学教育</span></div></div></div>
+<div class="card" data-href="https://www.xiaohongshu.com/search_result/6810df2f0000000022034a60?xsec_token=ABKN05Tf-gbgWZeVkSI0lWqoHGsLmJSaNe7_MBmqV_qtA=&amp;xsec_source=" data-score="5" data-cat="" data-platform="xiaohongshu"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://sns-webpic-qc.xhscdn.com/202607040802/d69ca21730df5ca4eb2e12d6463299db/1040g00831gs55p543a6g5nlcurt082dq6j5eup8!nc_n_webp_prv_1" alt="ChatGPT限制越来越严格了（已开通plus）"><span class="platform-icon">小红书</span><span class="score-badge s7">🤖 5</span></div><div class="card-body"><div class="title">ChatGPT限制越来越严格了（已开通plus）</div><div class="card-meta"><span class="author"></span><span class="stats"><span>▶ ?</span><span>👍 1148</span></span></div><div class="tags"><span class="tag">ChatGPT</span><span class="tag">使用限制</span><span class="tag">Plus会员</span></div></div></div>
+<div class="card" data-href="https://www.xiaohongshu.com/search_result/689ff7fc000000001c008d83?xsec_token=ABorpTfO_Vi7oB2bcpUsq6grtxChnhuA2PWUF7dlPpJLE=&amp;xsec_source=" data-score="5" data-cat="" data-platform="xiaohongshu"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://sns-webpic-qc.xhscdn.com/202607040802/b69375fab71cffb90bf41d5f2add9abe/notes_pre_post/1040g3k031l7t7c76li004a54n0dmsrt4iiqsj80!nc_n_webp_prv_1" alt="时间在呼吸"><span class="platform-icon">小红书</span><span class="score-badge s7">🤖 5</span></div><div class="card-body"><div class="title">时间在呼吸</div><div class="card-meta"><span class="author"></span><span class="stats"><span>▶ ?</span><span>👍 1.1万</span></span></div><div class="tags"><span class="tag">创意概念</span><span class="tag">抽象表达</span><span class="tag">艺术创作</span></div></div></div>
+  <div class="empty" id="empty">
+    <div class="icon">🔍</div>
+    <p>没有符合条件的视频</p>
+  </div>
+</div>
+<div class="play-overlay hidden" id="overlay">
+  <div class="player-wrap">
+    <div class="player-aspect">
+      <iframe id="player" allowfullscreen></iframe>
+    </div>
+    <div class="player-bar">
+      <span class="player-title" id="playerTitle"></span>
+      <button class="close-btn" id="closeBtn" aria-label="关闭">✕</button>
+    </div>
+  </div>
+</div>
+<script>
+const overlay = document.getElementById('overlay');
+const player = document.getElementById('player');
+const playerTitle = document.getElementById('playerTitle');
+
+function closePlayer() {
+  overlay.classList.add('hidden');
+  player.src = '';
+  playerTitle.textContent = '';
+}
+
+document.getElementById('closeBtn').onclick = closePlayer;
+overlay.onclick = e => { if (e.target === overlay) closePlayer(); };
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closePlayer(); });
+
+// 卡片点击：有 embed → iframe 内嵌；无 embed → 新标签页外跳
+document.querySelectorAll('.card').forEach(card => {
+  card.onclick = () => {
+    const embed = card.dataset.embed;
+    if (embed) {
+      player.src = embed;
+      playerTitle.textContent = card.querySelector('.title')?.textContent || '';
+      overlay.classList.remove('hidden');
+    } else {
+      const href = card.dataset.href;
+      if (href) window.open(href, '_blank');
+    }
+  };
+});
+
+// 过滤（评分 + 平台 + 分区）
+const cards = [...document.querySelectorAll('.card')];
+const emptyEl = document.getElementById('empty');
+document.getElementById('filters').addEventListener('click', e => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  document.querySelectorAll('#filters button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const min = parseInt(btn.dataset.min ?? '0');
+  const cat = btn.dataset.cat ?? '';
+  const platform = btn.dataset.platform ?? '';
+  let visible = 0;
+  cards.forEach(c => {
+    const score = parseInt(c.dataset.score ?? '0');
+    const show = (min === 0 || score >= min)
+      && (cat === '' || c.dataset.cat === cat)
+      && (platform === '' || c.dataset.platform === platform);
+    c.style.display = show ? '' : 'none';
+    if (show) visible++;
+  });
+  emptyEl.style.display = visible === 0 ? 'block' : 'none';
+});
+</script>
+</body>
+</html>

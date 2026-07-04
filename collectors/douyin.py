@@ -1,11 +1,12 @@
 """抖音视频采集器（CDP 复用浏览器登录态）。"""
 import json
 import re
+import urllib.parse
 import uuid
 
 from collectors.base import (
     CDPCollector, CollectorError, LoginExpiredError,
-    make_video, register_collector,
+    _ts_to_iso, make_video, register_collector,
 )
 from utils.log import get_logger
 
@@ -20,11 +21,15 @@ class DouyinCollector(CDPCollector):
     default_keywords = ["搞笑", "沙雕", "鬼畜"]
     per_keyword = 10
     request_delay = 3.5
-    page_wait = 0
+    page_wait = 2.0   # 导航后等待页面加载，给抖音正常的页面交互信号
     content_hash_prefix = "douyin"
     keywords: list[str] = []
 
     def _search(self, keyword: str) -> list[dict]:
+        # 先导航到搜索结果页，模拟真实用户行为，避免直接打内部 API 被识别为机器人
+        encoded = urllib.parse.quote(keyword)
+        self._navigate(f"https://www.douyin.com/search/{encoded}?type=video")
+
         kw_js = json.dumps(keyword, ensure_ascii=False)
         sid = str(uuid.uuid4())
         js = (
@@ -32,7 +37,7 @@ class DouyinCollector(CDPCollector):
             f"var kw=encodeURIComponent({kw_js});"
             f"var url='https://www.douyin.com/aweme/v1/web/search/item/'"
             f"+'?keyword='+kw+'&count={self.per_keyword}&offset=0'"
-            f"+'&search_id={sid}&search_source=normal_search&is_filter_search=0&aid=6383';"
+            f"+'&search_id={sid}&search_source=normal_search&is_filter_search=1&publish_time=7&aid=6383';"
             f"var xhr=new XMLHttpRequest();"
             f"xhr.open('GET',url,false);"
             f"xhr.setRequestHeader('Referer','https://www.douyin.com/');"
@@ -41,10 +46,11 @@ class DouyinCollector(CDPCollector):
         )
         raw = self._eval(js, timeout=15) or {}
         code = raw.get("status_code", 0)
+        nil = (raw.get("search_nil_info") or {}).get("search_nil_type", "")
+        # verify_check 可能在 status_code=0 时出现，需独立检测
+        if nil == "verify_check" or code in (2483, 8, 9):
+            raise LoginExpiredError(f"抖音触发人机验证 (code={code})")
         if code != 0:
-            nil = (raw.get("search_nil_info") or {}).get("search_nil_type", "")
-            if nil == "verify_check" or code in (2483, 8, 9):
-                raise LoginExpiredError(f"抖音触发人机验证 (code={code})")
             raise CollectorError(f"抖音搜索返回 status_code={code}")
         # 新版 API 把视频信息嵌套在 aweme_info 里，提取到顶层兼容 _map_item
         items = raw.get("data") or []
@@ -77,6 +83,7 @@ class DouyinCollector(CDPCollector):
             play_count=stats.get("play_count"),
             like_count=stats.get("digg_count"),
             page_url=f"https://www.douyin.com/video/{aweme_id}",
+            published_at=_ts_to_iso(item.get("create_time")),
             extra={"comment_count": stats.get("comment_count"),
                    "share_count": stats.get("share_count"),
                    "search_keyword": keyword},

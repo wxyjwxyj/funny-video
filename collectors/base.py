@@ -175,13 +175,24 @@ class CDPCollector(BaseCollector):
 # 工具函数（所有采集器共用）
 # ═══════════════════════════════════════════════════════════════════
 
+def _ts_to_iso(ts: int | float | None) -> str | None:
+    """Unix 时间戳转 ISO8601 UTC 字符串，供各采集器共用。"""
+    if not ts:
+        return None
+    try:
+        return datetime.fromtimestamp(ts, tz=timezone.utc).isoformat()
+    except (OSError, OverflowError, ValueError):
+        return None
+
+
 def make_video(*, platform: str, platform_video_id: str, title: str,
                content_hash_prefix: str, topic: str = "",
                author: str = "", author_id: str = "",
                cover_url: str = "", duration: int | None = None,
                play_count: int | None = None, like_count: int | None = None,
                category: str | None = None, embed_url: str | None = None,
-               page_url: str = "", extra: dict | None = None) -> dict:
+               page_url: str = "", extra: dict | None = None,
+               published_at: str | None = None) -> dict:
     """构造标准 videos 表 dict，所有采集器共用。"""
     now = datetime.now(timezone.utc).isoformat()
     return {
@@ -204,6 +215,7 @@ def make_video(*, platform: str, platform_video_id: str, title: str,
         "extra": extra or {},
         "content_hash": f"{content_hash_prefix}:{platform_video_id}",
         "status": "active",
+        "published_at": published_at,
         "fetched_at": now,
         "created_at": now,
     }
