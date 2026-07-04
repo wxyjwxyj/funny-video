@@ -121,9 +121,9 @@ python scripts/scheduler.py --interval 6
 | 文件 | 说明 |
 |------|------|
 | `index.html` | 主页入口 |
-| `wall.html` | 今日搞笑视频墙 |
+| `funny_wall.html` | 今日搞笑视频墙 |
 | `ai_wall.html` | 今日AI视频墙 |
-| `archive/` | 搞笑视频历史归档 |
+| `funny_archive/` | 搞笑视频历史归档 |
 | `ai_archive/` | AI视频历史归档 |
 
 详见 `PROJECT_PLAN.md`。

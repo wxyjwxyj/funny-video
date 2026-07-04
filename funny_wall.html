@@ -129,6 +129,8 @@ header {
 .feat-card[data-platform="bilibili"] { border-top: 2px solid var(--bili); }
 .feat-card[data-platform="douyin"]   { border-top: 2px solid var(--douyin); }
 .feat-card[data-platform="xiaohongshu"] { border-top: 2px solid var(--xhs); }
+.feat-card.watched { opacity: 0.55; }
+.feat-card.liked   { box-shadow: 0 0 0 2px var(--accent), var(--shadow-card); }
 .feat-thumb {
   position: relative; width: 100%; aspect-ratio: 16/9;
   background: var(--surface-3); overflow: hidden;
@@ -299,7 +301,7 @@ header {
   <div class="header-stats">
     <span class="stat-badge">2026-07-04</span>
     <span class="stat-badge">58 条</span>
-    <span class="update-time">更新 2026-07-04 22:10:37</span>
+    <span class="update-time">更新 2026-07-04 22:14:33</span>
   </div>
 </header>
 <div class="filters" id="filters">
@@ -428,13 +430,17 @@ function saveSet(key, set) {
 let likedSet   = getSet(LIKED_KEY);
 let watchedSet = getSet(WATCHED_KEY);
 
-// 页面加载时把已有状态渲染到卡片上
-document.querySelectorAll('.card[data-vid]').forEach(card => {
+// 页面加载时把已有状态渲染到卡片上（主 grid + 精华条）
+document.querySelectorAll('.card[data-vid], .feat-card[data-vid]').forEach(card => {
   const vid = card.dataset.vid;
   if (!vid) return;
-  const btn = card.querySelector('.like-btn');
-  if (likedSet.has(vid))   { card.classList.add('liked');   if (btn) btn.textContent = '❤️'; }
+  if (likedSet.has(vid))   { card.classList.add('liked'); }
   if (watchedSet.has(vid)) { card.classList.add('watched'); }
+});
+// .card 的爱心按钮文字单独同步（.feat-card 无 like-btn，用 box-shadow 表示已喜欢）
+document.querySelectorAll('.card[data-vid] .like-btn').forEach(btn => {
+  const vid = btn.closest('.card')?.dataset.vid;
+  if (vid && likedSet.has(vid)) btn.textContent = '❤️';
 });
 
 // 爱心按钮点击（stopPropagation 防止触发卡片播放/跳转）
