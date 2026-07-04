@@ -177,6 +177,7 @@ def _render_card(v: dict) -> str:
     category = _html.escape(v.get("category") or "")
     platform = _html.escape(v.get("platform") or "")
     author = _html.escape(v.get("author") or "")
+    vid = _html.escape(v.get("content_hash") or "")
 
     # 平台显示名称
     platform_labels = {"bilibili": "B站", "douyin": "抖音", "xiaohongshu": "小红书"}
@@ -207,7 +208,7 @@ def _render_card(v: dict) -> str:
     age_html = f'<span class="pub-age">{age_label}</span>' if age_label else ""
 
     return (
-        f'<div class="card" {data_attr} data-score="{score}" data-cat="{category}" data-platform="{platform}" data-age="{age_days}">'
+        f'<div class="card" {data_attr} data-score="{score}" data-cat="{category}" data-platform="{platform}" data-age="{age_days}" data-vid="{vid}">'
         f'<div class="thumb">'
         f'<img loading="lazy" referrerpolicy="no-referrer" src="{cover_url}" alt="{title}">'
         f'<span class="platform-icon">{platform_label}</span>'
@@ -221,6 +222,7 @@ def _render_card(v: dict) -> str:
         f'{age_html}'
         f'<span>👍 {_format_num(v.get("like_count"))}</span>'
         f'</span>'
+        f'<button class="like-btn" aria-label="喜欢">🤍</button>'
         f'</div>'
         f'<div class="tags">{tag_html}</div>'
         f'</div></div>'

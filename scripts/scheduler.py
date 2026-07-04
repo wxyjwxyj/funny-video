@@ -119,6 +119,24 @@ def _preflight_check() -> bool:
     return True
 
 
+def _cleanup_old_videos() -> None:
+    """14天前、funny_score<7 的视频标记为 inactive，减少主查询扫表量。
+
+    每次 run_all 末尾调用；UPDATE 幂等，重复跑无副作用。
+    """
+    import contextlib
+    from storage.db import get_connection
+    with contextlib.closing(get_connection(_DB)) as conn:
+        cur = conn.execute(
+            "UPDATE videos SET status='inactive' "
+            "WHERE fetched_at < date('now', '-14 days') "
+            "  AND funny_score < 7 AND status='active'",
+        )
+        conn.commit()
+    if cur.rowcount:
+        logger.info("DB清理: 标记 %d 条旧低分视频为 inactive", cur.rowcount)
+
+
 def _push_walls() -> None:
     changed: set[str] = set()
     for args in (["git", "diff", "--name-only"], ["git", "diff", "--cached", "--name-only"]):
@@ -169,6 +187,7 @@ def run_all(skip_collect: bool = False, skip_tag: bool = False) -> None:
                                  "platforms": {}, "failed": [(t, "异常")]})
 
     logger.info("==== 所有 topic 完成 ====")
+    _cleanup_old_videos()
     _push_walls()
 
     # 汇总各 topic 的采集统计，组装通知

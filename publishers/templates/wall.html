@@ -80,6 +80,19 @@ header {
 .filters button[data-platform="douyin"].active   { background: var(--douyin); border-color: var(--douyin); box-shadow: 0 0 14px rgba(254,44,85,.35); }
 .filters button[data-platform="xiaohongshu"].active { background: var(--xhs); border-color: var(--xhs); box-shadow: 0 0 14px rgba(255,36,66,.35); }
 
+.like-btn {
+  background: none; border: none; cursor: pointer;
+  font-size: 15px; padding: 2px 4px; line-height: 1;
+  border-radius: 6px; flex-shrink: 0;
+  transition: transform .15s;
+}
+.like-btn:hover { transform: scale(1.25); }
+/* 已看：整张卡轻度褪色 + 右上角 "✓" 标记 */
+.card.watched { opacity: 0.55; }
+.card.watched .score-badge::after {
+  content: ' ✓'; font-size: 10px; color: #4ade80;
+}
+
 /* ── 精华条 ── */
 .featured {
   padding: 14px 24px 6px;
@@ -334,7 +347,51 @@ document.getElementById('closeBtn').onclick = closePlayer;
 overlay.onclick = e => { if (e.target === overlay) closePlayer(); };
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closePlayer(); });
 
-// 卡片点击：有 embed → iframe 内嵌；无 embed → 新标签页外跳
+// ── 喜欢 + 已看（localStorage 持久化，跨页面刷新保留）──
+const LIKED_KEY   = 'fv_liked';
+const WATCHED_KEY = 'fv_watched';
+
+function getSet(key) {
+  try { return new Set(JSON.parse(localStorage.getItem(key) || '[]')); }
+  catch (_) { return new Set(); }
+}
+function saveSet(key, set) {
+  localStorage.setItem(key, JSON.stringify([...set]));
+}
+
+let likedSet   = getSet(LIKED_KEY);
+let watchedSet = getSet(WATCHED_KEY);
+
+// 页面加载时把已有状态渲染到卡片上
+document.querySelectorAll('.card[data-vid]').forEach(card => {
+  const vid = card.dataset.vid;
+  if (!vid) return;
+  const btn = card.querySelector('.like-btn');
+  if (likedSet.has(vid))   { card.classList.add('liked');   if (btn) btn.textContent = '❤️'; }
+  if (watchedSet.has(vid)) { card.classList.add('watched'); }
+});
+
+// 爱心按钮点击（stopPropagation 防止触发卡片播放/跳转）
+document.querySelectorAll('.like-btn').forEach(btn => {
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    const card = btn.closest('.card');
+    const vid  = card?.dataset.vid;
+    if (!vid) return;
+    if (likedSet.has(vid)) {
+      likedSet.delete(vid);
+      card.classList.remove('liked');
+      btn.textContent = '🤍';
+    } else {
+      likedSet.add(vid);
+      card.classList.add('liked');
+      btn.textContent = '❤️';
+    }
+    saveSet(LIKED_KEY, likedSet);
+  });
+});
+
+// 卡片点击：有 embed → iframe 内嵌；无 embed → 新标签页外跳；同时标记已看
 document.querySelectorAll('.card').forEach(card => {
   card.onclick = () => {
     const embed = card.dataset.embed;
@@ -345,6 +402,13 @@ document.querySelectorAll('.card').forEach(card => {
     } else {
       const href = card.dataset.href;
       if (href) window.open(href, '_blank');
+    }
+    // 标记已看（localStorage 持久化）
+    const vid = card.dataset.vid;
+    if (vid && !watchedSet.has(vid)) {
+      watchedSet.add(vid);
+      card.classList.add('watched');
+      saveSet(WATCHED_KEY, watchedSet);
     }
   };
 });
