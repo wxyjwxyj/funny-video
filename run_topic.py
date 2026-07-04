@@ -6,6 +6,7 @@
 """
 import argparse
 from pathlib import Path
+import time
 
 from collectors.base import create_collector
 import collectors.douyin  # noqa: F401 - 触发 @register_collector
@@ -23,14 +24,19 @@ _DB = Path(__file__).parent / "video.db"
 def run_pipeline(topic_name: str, *, tag_batch: int | None = None,
                  skip_collect: bool = False, skip_tag: bool = False,
                  skip_flags: set[str] | None = None,
-                 min_score: int | None = None) -> str | None:
+                 min_score: int | None = None) -> dict:
     """跑一个 topic 的完整链路：采集 → 去重 → 打标签 → 生成视频墙。
 
     所有逻辑由 TopicConfig 驱动，topic 之间零特殊处理。
+    返回本次运行统计字典，供 scheduler 组装通知用。
     """
     config = get_topic(topic_name)
     min_score = min_score if min_score is not None else config.min_score
     skip_flags = skip_flags or set()
+
+    total_inserted = 0
+    platform_stats: dict[str, int] = {}   # platform → 新增条数
+    failed_collectors: list[str] = []
 
     # ── 采集 ──
     if not skip_collect:
@@ -38,27 +44,56 @@ def run_pipeline(topic_name: str, *, tag_batch: int | None = None,
             if cdef.skip_flag and cdef.skip_flag in skip_flags:
                 logger.info("跳过采集器 %s (--skip-%s)", cdef.name, cdef.skip_flag)
                 continue
-            try:
-                coll = create_collector(cdef.name, topic=config.topic, **cdef.kwargs)
-                videos = coll.collect()
-                if videos:
-                    counts = dedup.run(videos)
-                    logger.info("[%s] %s 采集 %d 条，去重: %s", topic_name, cdef.name, len(videos), counts)
-            except Exception as e:
+
+            last_err: Exception | None = None
+            for attempt in range(2):           # 最多尝试2次（失败后等5秒重试）
+                try:
+                    coll = create_collector(cdef.name, topic=config.topic, **cdef.kwargs)
+                    videos = coll.collect()
+                    if videos:
+                        counts = dedup.run(videos)
+                        inserted = counts.get("inserted", 0)
+                        total_inserted += inserted
+                        platform = cdef.platform or cdef.name
+                        platform_stats[platform] = platform_stats.get(platform, 0) + inserted
+                        logger.info("[%s] %s 采集 %d 条，去重: %s",
+                                    topic_name, cdef.name, len(videos), counts)
+                    last_err = None
+                    break                      # 成功，不重试
+                except Exception as e:
+                    last_err = e
+                    if attempt == 0:
+                        logger.warning("[%s] %s 第1次失败，5秒后重试: %s",
+                                       topic_name, cdef.name, e)
+                        time.sleep(5)
+
+            if last_err is not None:
                 if cdef.optional:
-                    logger.warning("[%s] %s 采集失败（降级）: %s", topic_name, cdef.name, e)
+                    logger.warning("[%s] %s 采集失败（降级）: %s",
+                                   topic_name, cdef.name, last_err)
+                    failed_collectors.append(cdef.name)
                 else:
-                    raise
+                    raise last_err
 
     # ── 打标签 ──
+    tagged = 0
     if not skip_tag:
         tagged = tagging.run(batch_size=tag_batch, topic=config.topic, tag_prompt=config.topic)
         logger.info("[%s] 打标签: %d 条", topic_name, tagged)
 
     # ── 生成 ──
-    out = generate(topic=config.topic, min_score=min_score, min_like_count=config.min_like_count, display_name=config.display_name)
+    out = generate(topic=config.topic, min_score=min_score,
+                   min_like_count=config.min_like_count, display_name=config.display_name)
     logger.info("[%s] 完成，视频墙: %s", topic_name, out)
-    return out
+
+    return {
+        "topic": topic_name,
+        "inserted": total_inserted,
+        "tagged": tagged,
+        "platforms": platform_stats,
+        "failed": failed_collectors,
+        "wall": str(out),
+    }
 
 
 def main() -> None:

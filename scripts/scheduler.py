@@ -136,7 +136,6 @@ def _push_walls() -> None:
 
 def run_all(skip_collect: bool = False, skip_tag: bool = False) -> None:
     init_db(_DB)
-    failed: list[str] = []
     topics = list_topics()
 
     # 两个 topic 独立采集、打标签、生成，无共享状态，并行跑节省一半时间
@@ -146,20 +145,39 @@ def run_all(skip_collect: bool = False, skip_tag: bool = False) -> None:
             pool.submit(run_pipeline, t, skip_collect=skip_collect, skip_tag=skip_tag): t
             for t in topics
         }
+        results: list[dict] = []
         for future in as_completed(fut_to_topic):
             t = fut_to_topic[future]
             try:
-                future.result()
+                results.append(future.result())
             except Exception:
                 logger.exception("[%s] 链路异常，跳过继续", t)
-                failed.append(t)
+                results.append({"topic": t, "inserted": 0, "tagged": 0,
+                                 "platforms": {}, "failed": [t]})
 
     logger.info("==== 所有 topic 完成 ====")
     _push_walls()
-    if failed:
-        _notify("搞笑视频墙 ⚠️", f"部分 topic 失败: {', '.join(failed)}")
+
+    # 汇总各 topic 的采集统计，组装通知
+    total_inserted = sum(r.get("inserted", 0) for r in results)
+    all_failed = [c for r in results for c in r.get("failed", [])]
+    platform_lines = []
+    for r in results:
+        for p, n in r.get("platforms", {}).items():
+            if n > 0:
+                label = {"bilibili": "B站", "douyin": "抖音", "xiaohongshu": "小红书"}.get(p, p)
+                platform_lines.append(f"{label}+{n}")
+
+    stats_str = f"新增 {total_inserted} 条"
+    if platform_lines:
+        stats_str += f"（{'  '.join(platform_lines)}）"
+
+    if all_failed:
+        _notify("搞笑视频墙 ⚠️",
+                f"{stats_str}  失败: {', '.join(all_failed)}")
     else:
-        _notify("搞笑视频墙 ✅", f"已更新 {time.strftime('%H:%M')}")
+        _notify("搞笑视频墙 ✅",
+                f"{stats_str}  {time.strftime('%H:%M')}")
 
 
 def main() -> None:
