@@ -120,8 +120,10 @@ def _preflight_check() -> bool:
 
 
 def _cleanup_old_videos() -> None:
-    """14天前、funny_score<7 的视频标记为 inactive，减少主查询扫表量。
+    """14天前、funny_score<7 或 funny_score IS NULL 的视频标记为 inactive。
 
+    减少主查询扫表量；标 inactive 不删数据。
+    NULL score = 打标签一直失败，保留14天后放弃。
     每次 run_all 末尾调用；UPDATE 幂等，重复跑无副作用。
     """
     import contextlib
@@ -130,11 +132,12 @@ def _cleanup_old_videos() -> None:
         cur = conn.execute(
             "UPDATE videos SET status='inactive' "
             "WHERE fetched_at < date('now', '-14 days') "
-            "  AND funny_score < 7 AND status='active'",
+            "  AND (funny_score < 7 OR funny_score IS NULL) "
+            "  AND status='active'",
         )
         conn.commit()
     if cur.rowcount:
-        logger.info("DB清理: 标记 %d 条旧低分视频为 inactive", cur.rowcount)
+        logger.info("DB清理: 标记 %d 条旧低分/未标签视频为 inactive", cur.rowcount)
 
 
 def _push_walls() -> None:
