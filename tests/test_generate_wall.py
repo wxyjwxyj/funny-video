@@ -41,7 +41,8 @@ def seeded_db(tmp_path, monkeypatch):
 
 
 def test_generate_creates_file(seeded_db, tmp_path):
-    out = generate(output=tmp_path / "wall.html", date=_TEST_DATE)
+    out = generate(output=tmp_path / "wall.html", date=_TEST_DATE,
+                   archive_dir=tmp_path / "archive")
     assert out.exists()
     content = out.read_text(encoding="utf-8")
     assert "搞笑视频BVaaa" in content
@@ -49,7 +50,8 @@ def test_generate_creates_file(seeded_db, tmp_path):
 
 
 def test_generate_min_score_filter(seeded_db, tmp_path):
-    out = generate(min_score=7, output=tmp_path / "wall.html", date=_TEST_DATE)
+    out = generate(min_score=7, output=tmp_path / "wall.html", date=_TEST_DATE,
+                   archive_dir=tmp_path / "archive")
     content = out.read_text(encoding="utf-8")
     assert "BVaaa" in content        # score=8，应在
     assert "BVbbb" not in content    # score=5，应被过滤

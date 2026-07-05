@@ -230,7 +230,8 @@ def _render_card(v: dict) -> str:
 def generate(topic: str = "funny", min_score: int = 7, min_like_count: int = 0,
              output: Path | None = None,
              date: str | None = None, display_name: str | None = None,
-             max_published_days: int | None = None) -> Path:
+             max_published_days: int | None = None,
+             archive_dir: Path | None = None) -> Path:
     """生成视频墙 HTML 文件。
 
     Args:
@@ -240,8 +241,8 @@ def generate(topic: str = "funny", min_score: int = 7, min_like_count: int = 0,
         output: 自定义输出路径，不传则按 topic 自动命名
         date: 筛选日期（YYYY-MM-DD），默认今天
         display_name: 页面标题，不传则从 topic 推导
-        max_published_days: 只展示最近 N 天内发布的内容（None=不限）；
-                            AI 类内容时效性强建议设 30，搞笑内容可留 None
+        max_published_days: 只展示最近 N 天内发布的内容（None=不限）
+        archive_dir: 归档目录（None=自动，用于测试隔离）
     """
     init_db(_DB_PATH)
 
@@ -249,7 +250,7 @@ def generate(topic: str = "funny", min_score: int = 7, min_like_count: int = 0,
     root = Path(__file__).parent.parent
     safe = re.sub(r"[^a-zA-Z0-9_-]", "_", topic)
     out = output if output else root / f"{safe}_wall.html"
-    archive_dir = root / f"{safe}_archive"
+    arc_dir = archive_dir if archive_dir is not None else root / f"{safe}_archive"
 
     template = _TEMPLATE.read_text(encoding="utf-8")
     date_str = date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -334,10 +335,10 @@ def generate(topic: str = "funny", min_score: int = 7, min_like_count: int = 0,
     _update_index_time(now)
 
     # 每次生成同步存档到 archive/YYYY-MM-DD.html
-    archive_dir.mkdir(exist_ok=True)
-    archive_file = archive_dir / f"{date_str}.html"
+    arc_dir.mkdir(exist_ok=True)
+    archive_file = arc_dir / f"{date_str}.html"
     archive_file.write_text(html, encoding="utf-8")
-    _update_archive_index(archive_dir, out, date_str, len(videos))
+    _update_archive_index(arc_dir, out, date_str, len(videos))
     logger.info("generate_wall: 已存档 %s", archive_file)
 
     return out
