@@ -35,10 +35,18 @@ def test_map_video_basic():
     assert v is not None
     assert v["platform"] == "bilibili"
     assert v["platform_video_id"] == "BV1test12345"
+    # 未传 content_hash_prefix 时用类默认值 "bilibili"
     assert v["content_hash"] == "bilibili:BV1test12345"
     assert "player.bilibili.com" in v["embed_url"]
     assert v["tags"] is None
     assert v["funny_score"] is None
+
+
+def test_map_video_prefix_override():
+    """registry 传入 content_hash_prefix 时，hash 格式正确变更。"""
+    collector_funny = BilibiliPopularCollector(topic="funny", content_hash_prefix="bilibili_funny")
+    v = collector_funny._map(_SAMPLE_ITEM)
+    assert v["content_hash"] == "bilibili_funny:BV1test12345"
 
 
 def test_map_video_skip_ogv():
@@ -90,6 +98,41 @@ def test_upsert_dedup(db_path):
     with contextlib.closing(get_connection(db_path)) as conn:
         row = conn.execute("SELECT title FROM videos WHERE content_hash='bilibili:BVbbb'").fetchone()
     assert row["title"] == "new"
+
+
+def test_upsert_fetched_at_preserved(db_path):
+    """fetched_at 在 re-upsert 时不应被覆盖（保留首次采集日期）。"""
+    import time
+    v1 = _make_video("BVfetch")
+    original_fetched = v1["fetched_at"]
+    repository.upsert_video(v1)
+
+    time.sleep(0.01)  # 确保时间推进
+    v2 = {**_make_video("BVfetch"), "title": "updated title"}
+    # 模拟新一次采集时 fetched_at 会是一个更新的时间
+    from datetime import datetime, timezone
+    v2["fetched_at"] = datetime.now(timezone.utc).isoformat()
+    repository.upsert_video(v2)
+
+    with contextlib.closing(get_connection(db_path)) as conn:
+        row = conn.execute("SELECT fetched_at, title FROM videos WHERE content_hash='bilibili:BVfetch'").fetchone()
+    assert row["fetched_at"] == original_fetched, "fetched_at 不应被覆盖"
+    assert row["title"] == "updated title", "其他字段应被更新"
+
+
+def test_upsert_coalesce_null(db_path):
+    """NULL 值不应覆盖 DB 里已有的非 NULL 字段（COALESCE 保护）。"""
+    v1 = {**_make_video("BVcoalesce"), "like_count": 9999, "category": "搞笑"}
+    repository.upsert_video(v1)
+
+    # 第二次 upsert：like_count=None, category=None（模拟 API 失败）
+    v2 = {**_make_video("BVcoalesce"), "like_count": None, "category": None}
+    repository.upsert_video(v2)
+
+    with contextlib.closing(get_connection(db_path)) as conn:
+        row = conn.execute("SELECT like_count, category FROM videos WHERE content_hash='bilibili:BVcoalesce'").fetchone()
+    assert row["like_count"] == 9999, "like_count 不应被 NULL 覆盖"
+    assert row["category"] == "搞笑", "category 不应被 NULL 覆盖"
 
 
 def test_upsert_extra_serialized(db_path):
