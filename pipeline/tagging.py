@@ -89,20 +89,19 @@ def _call_batch(videos: list[dict], topic: str) -> list[dict | None]:
     return output
 
 
-def run(batch_size: int | None = None, workers: int = 4, topic: str = "funny", tag_prompt: str | None = None) -> int:
+def run(batch_size: int | None = None, workers: int = 4, topic: str = "funny") -> int:
     """批量给未打标签的视频评分，返回处理条数。batch_size=None 表示全部处理。"""
     videos = repository.list_untagged(limit=batch_size, topic=topic)
     if not videos:
         logger.info("tagging: 无待处理视频 (topic=%s)", topic)
         return 0
 
-    effective_topic = tag_prompt or topic
     batches = [videos[i:i+BATCH_SIZE] for i in range(0, len(videos), BATCH_SIZE)]
     logger.info("tagging: %d 条 → %d 批 (batch_size=%d, workers=%d)", len(videos), len(batches), BATCH_SIZE, workers)
 
     success = 0
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        fut_to_batch = {pool.submit(_call_batch, b, effective_topic): b for b in batches}
+        fut_to_batch = {pool.submit(_call_batch, b, topic): b for b in batches}
         for future in as_completed(fut_to_batch):
             batch = fut_to_batch[future]
             try:

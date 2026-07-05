@@ -240,15 +240,7 @@ def _parse_play(text: str) -> int | None:
     except ValueError:
         return None
 
-
 # ── 兼容旧入口 ─────────────────────────────────────────────────
 def fetch_popular(pages: int = 5, page_size: int = 20,
                   categories: frozenset[str] | None = None) -> list[dict]:
     return BilibiliPopularCollector(pages=pages, page_size=page_size, categories=categories).collect()
-
-
-def fetch_ai_videos(keywords: list[str] | None = None) -> list[dict]:
-    return BilibiliSearchCollector(
-        topic="ai", content_hash_prefix="bilibili_ai",
-        keywords=keywords or [],
-    ).collect()
