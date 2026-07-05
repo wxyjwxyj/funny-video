@@ -22,3 +22,4 @@ class TopicConfig:
     score_type: str = "funny_score"         # 已废弃，由 tag_prompt=config.topic 替代。保留仅为向后兼容
     min_score: int = 7                      # 最低上墙分数
     min_like_count: int = 0                 # 最低点赞数（0=不限）；play_count 抖音/小红书不可用
+    max_published_days: int | None = None   # 最长发布时效（天），None=不限；AI 内容设 30，搞笑内容可留 None

@@ -195,6 +195,7 @@ header {
 .thumb img {
   width: 100%; height: 100%;
   object-fit: cover;
+  object-position: top;      /* 小红书/抖音竖版封面优先显示顶部文字区 */
   transition: transform .35s cubic-bezier(.25,.46,.45,.94);
 }
 .card:hover .thumb img { transform: scale(1.06); }
@@ -434,30 +435,69 @@ document.querySelectorAll('.feat-card').forEach(card => {
   };
 });
 
-// 过滤（评分 + 平台 + 分区 + 新鲜度）
+// 过滤（多维度独立切换：评分单选，平台/新鲜度/分区独立开关，可组合）
 const cards = [...document.querySelectorAll('.card')];
 const emptyEl = document.getElementById('empty');
-document.getElementById('filters').addEventListener('click', e => {
-  const btn = e.target.closest('button');
-  if (!btn) return;
-  document.querySelectorAll('#filters button').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  const min = parseInt(btn.dataset.min ?? '0');
-  const cat = btn.dataset.cat ?? '';
-  const platform = btn.dataset.platform ?? '';
-  const maxAge = btn.dataset.maxAge ? parseInt(btn.dataset.maxAge) : null;
+
+let fScore   = 0;     // 评分下限（0=全部）
+let fMaxAge  = null;  // 发布天数上限（null=不限）
+let fPlatform = '';   // 平台（''=全部）
+let fCat     = '';    // 分区（''=全部）
+
+function applyFilter() {
   let visible = 0;
   cards.forEach(c => {
-    const score = parseInt(c.dataset.score ?? '0');
-    const age = parseInt(c.dataset.age ?? '9999');
-    const show = (min === 0 || score >= min)
-      && (cat === '' || c.dataset.cat === cat)
-      && (platform === '' || c.dataset.platform === platform)
-      && (maxAge === null || age <= maxAge);
+    const show =
+      (fScore === 0 || parseInt(c.dataset.score ?? '0') >= fScore)
+      && (fMaxAge === null || parseInt(c.dataset.age ?? '9999') <= fMaxAge)
+      && (fPlatform === '' || c.dataset.platform === fPlatform)
+      && (fCat === '' || c.dataset.cat === fCat);
     c.style.display = show ? '' : 'none';
     if (show) visible++;
   });
   emptyEl.style.display = visible === 0 ? 'block' : 'none';
+}
+
+document.getElementById('filters').addEventListener('click', e => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+
+  if ('min' in btn.dataset) {
+    // 评分：单选组，不支持取消（始终有一个基准分）
+    fScore = parseInt(btn.dataset.min);
+    document.querySelectorAll('#filters button[data-min]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+
+  } else if ('maxAge' in btn.dataset) {
+    // 新鲜度：toggle——再次点击取消
+    const val = parseInt(btn.dataset.maxAge);
+    if (fMaxAge === val) { fMaxAge = null; btn.classList.remove('active'); }
+    else                 { fMaxAge = val;  btn.classList.add('active'); }
+
+  } else if ('platform' in btn.dataset) {
+    // 平台：toggle——再次点击取消；平台之间互斥
+    const val = btn.dataset.platform;
+    if (fPlatform === val) {
+      fPlatform = ''; btn.classList.remove('active');
+    } else {
+      fPlatform = val;
+      document.querySelectorAll('#filters button[data-platform]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    }
+
+  } else if ('cat' in btn.dataset) {
+    // 分区：toggle——再次点击取消
+    const val = btn.dataset.cat;
+    if (fCat === val) {
+      fCat = ''; btn.classList.remove('active');
+    } else {
+      fCat = val;
+      document.querySelectorAll('#filters button[data-cat]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    }
+  }
+
+  applyFilter();
 });
 </script>
 </body>

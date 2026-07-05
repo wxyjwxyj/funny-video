@@ -231,7 +231,8 @@ def _render_card(v: dict) -> str:
 
 def generate(topic: str = "funny", min_score: int = 7, min_like_count: int = 0,
              output: Path | None = None,
-             date: str | None = None, display_name: str | None = None) -> Path:
+             date: str | None = None, display_name: str | None = None,
+             max_published_days: int | None = None) -> Path:
     """生成视频墙 HTML 文件。
 
     Args:
@@ -241,6 +242,8 @@ def generate(topic: str = "funny", min_score: int = 7, min_like_count: int = 0,
         output: 自定义输出路径，不传则按 topic 自动命名
         date: 筛选日期（YYYY-MM-DD），默认今天
         display_name: 页面标题，不传则从 topic 推导
+        max_published_days: 只展示最近 N 天内发布的内容（None=不限）；
+                            AI 类内容时效性强建议设 30，搞笑内容可留 None
     """
     init_db(_DB_PATH)
 
@@ -264,6 +267,10 @@ def generate(topic: str = "funny", min_score: int = 7, min_like_count: int = 0,
         params.append(min_like_count)
     sql += " AND date(fetched_at) = ?"
     params.append(date_str)
+    if max_published_days is not None:
+        # published_at 为 NULL 的记录不过滤（兼容历史未采集发布时间的数据）
+        sql += " AND (published_at IS NULL OR published_at >= date('now', ?))"
+        params.append(f"-{max_published_days} days")
 
     with contextlib.closing(get_connection(_DB_PATH)) as conn:
         rows = conn.execute(

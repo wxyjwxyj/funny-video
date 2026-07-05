@@ -96,7 +96,8 @@ def run_pipeline(topic_name: str, *, tag_batch: int | None = None,
 
     # ── 生成 ──
     out = generate(topic=config.topic, min_score=min_score,
-                   min_like_count=config.min_like_count, display_name=config.display_name)
+                   min_like_count=config.min_like_count, display_name=config.display_name,
+                   max_published_days=config.max_published_days)
     logger.info("[%s] 完成，视频墙: %s", topic_name, out)
 
     return {
