@@ -18,7 +18,6 @@ logger = get_logger(__name__)
 
 _TEMPLATE = Path(__file__).parent / "templates" / "wall.html"
 _DB_PATH = Path(__file__).parent.parent / "video.db"
-_ARCHIVE_DIR = Path(__file__).parent.parent / "archive"
 
 
 def _update_index_time(now: str) -> None:
@@ -250,13 +249,9 @@ def generate(topic: str = "funny", min_score: int = 7, min_like_count: int = 0,
 
     # 根据 topic 决定输出文件和归档目录
     root = Path(__file__).parent.parent
-    if output:
-        out = output
-        archive_dir = _ARCHIVE_DIR
-    else:
-        safe = re.sub(r"[^a-zA-Z0-9_-]", "_", topic)
-        out = root / f"{safe}_wall.html"
-        archive_dir = root / f"{safe}_archive"
+    safe = re.sub(r"[^a-zA-Z0-9_-]", "_", topic)
+    out = output if output else root / f"{safe}_wall.html"
+    archive_dir = root / f"{safe}_archive"
 
     template = _TEMPLATE.read_text(encoding="utf-8")
     date_str = date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
