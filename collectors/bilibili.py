@@ -39,6 +39,7 @@ class BilibiliPopularCollector(BaseCollector):
     pages: int = 5
     page_size: int = 20
     categories: frozenset[str] | None = None  # None=全收
+    content_hash_prefix: str = "bilibili"     # 允许 registry 覆盖为 topic 前缀
 
     def collect(self) -> list[dict]:
         session = retry_session()

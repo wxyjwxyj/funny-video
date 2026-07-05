@@ -31,6 +31,11 @@ def upsert_video(video: dict) -> str:
     cols = list(row.keys())
     placeholders = ", ".join(["?"] * len(cols))
     update_cols = [c for c in cols if c not in ("content_hash", "created_at", "fetched_at")]
+    update_set = ", ".join(f"{c} = excluded.{c}" for c in update_cols)
+    sql = (
+        f"INSERT INTO videos ({', '.join(cols)}) VALUES ({placeholders})"
+        f" ON CONFLICT(content_hash) DO UPDATE SET {update_set}"
+    )
 
     with contextlib.closing(get_db()) as conn:
         with conn:  # 同一事务内 SELECT + INSERT，SQLite 写锁保证原子性
