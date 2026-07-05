@@ -1,5 +1,6 @@
 """B站视频采集器 — API热门 + CDP搜索。"""
 import urllib.parse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import requests
 
@@ -174,24 +175,21 @@ class BilibiliSearchCollector(CDPCollector):
         return results
 
     def _enrich_video_info(self, bvids: list[str]) -> dict[str, dict]:
-        """批量获取视频详情（发布时间/点赞数/时长/分区），使用 B站公开 API。
+        """并行批量获取视频详情（发布时间/点赞数/时长/分区），使用 B站公开 API。
 
-        失败静默忽略，返回 {bvid: {published_at, like_count, duration, category}}。
+        最多5个并发请求，失败静默忽略，返回 {bvid: {published_at, like_count, ...}}。
         """
-        session = retry_session()
-        result: dict[str, dict] = {}
-        for bvid in bvids:
+        def fetch_one(bvid: str) -> tuple[str, dict] | None:
             try:
-                resp = session.get(
+                resp = requests.get(
                     "https://api.bilibili.com/x/web-interface/view",
-                    params={"bvid": bvid},
-                    headers=_HEADERS, timeout=8,
+                    params={"bvid": bvid}, headers=_HEADERS, timeout=8,
                 )
                 if resp.status_code == 200:
                     data = resp.json().get("data", {})
                     if resp.json().get("code") == 0 and data:
                         stat = data.get("stat", {})
-                        result[bvid] = {
+                        return bvid, {
                             "published_at": _ts_to_iso(data.get("pubdate")),
                             "like_count":   stat.get("like"),
                             "duration":     data.get("duration"),
@@ -199,6 +197,15 @@ class BilibiliSearchCollector(CDPCollector):
                         }
             except Exception:
                 pass
+            return None
+
+        result: dict[str, dict] = {}
+        with ThreadPoolExecutor(max_workers=5) as pool:
+            futures = {pool.submit(fetch_one, bvid): bvid for bvid in bvids}
+            for future in as_completed(futures):
+                ret = future.result()
+                if ret:
+                    result[ret[0]] = ret[1]
         return result
 
     def _map_item(self, item: dict, keyword: str) -> dict | None:
