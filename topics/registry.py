@@ -103,7 +103,7 @@ def _build_topics() -> dict[str, TopicConfig]:
             score_type="funny_score",
             min_score=5,
             min_like_count=1000,
-            max_published_days=30,   # AI 内容时效性强，只展示近30天发布的
+            max_published_days=14,   # AI 内容时效性强，只展示近14天发布的
         ),
     }
 
