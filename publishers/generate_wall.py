@@ -269,9 +269,9 @@ def generate(topic: str = "funny", min_score: int = 7, min_like_count: int = 0,
     sql += " AND date(fetched_at) = ?"
     params.append(date_str)
     if max_published_days is not None:
-        # published_at IS NULL 不再放行：无法确认发布时间的视频同样过滤
-        # （搞笑 topic 不设 max_published_days，不受影响）
-        sql += " AND published_at >= date('now', ?)"
+        # published_at IS NULL 放行：CDP 抓取的视频（抖音/小红书/B站搜索）无法获取发布时间，
+        # 但 fetched_at 已锁定首次采集日期，不会重复出现——时效性由 fetched_at 保证
+        sql += " AND (published_at IS NULL OR published_at >= date('now', ?))"
         params.append(f"-{max_published_days} days")
 
     with contextlib.closing(get_connection(_DB_PATH)) as conn:

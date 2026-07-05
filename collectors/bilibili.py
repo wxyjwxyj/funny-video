@@ -148,28 +148,37 @@ class BilibiliSearchCollector(CDPCollector):
         return items[:self.per_keyword]
 
     def collect(self) -> list[dict]:
-        """采集后批量补全 published_at（CDP DOM 无法直接获取发布时间）。"""
+        """采集后批量补全 published_at / like_count 等字段（CDP DOM 无法直接获取）。"""
         results = super().collect()
         if not results:
             return results
-        # 找出所有还没有 published_at 的视频，批量向 B站 API 补
-        missing = [v["platform_video_id"] for v in results if not v.get("published_at")]
+        # 找出需要补全的视频（like_count 或 published_at 缺失）
+        missing = [v["platform_video_id"] for v in results
+                   if not v.get("published_at") or v.get("like_count") is None]
         if missing:
-            logger.info("[BilibiliSearch] 补全 published_at: %d 条", len(missing))
-            pubdates = self._fetch_pubdates(missing)
+            logger.info("[BilibiliSearch] 补全视频详情: %d 条", len(missing))
+            enriched = self._enrich_video_info(missing)
             for v in results:
                 pid = v["platform_video_id"]
-                if pid in pubdates:
-                    v["published_at"] = pubdates[pid]
+                if pid in enriched:
+                    info = enriched[pid]
+                    if not v.get("published_at") and info.get("published_at"):
+                        v["published_at"] = info["published_at"]
+                    if v.get("like_count") is None and info.get("like_count") is not None:
+                        v["like_count"] = info["like_count"]
+                    if not v.get("duration") and info.get("duration"):
+                        v["duration"] = info["duration"]
+                    if not v.get("category") and info.get("category"):
+                        v["category"] = info["category"]
         return results
 
-    def _fetch_pubdates(self, bvids: list[str]) -> dict[str, str]:
-        """批量获取视频发布时间，使用 B站公开 video info API。
+    def _enrich_video_info(self, bvids: list[str]) -> dict[str, dict]:
+        """批量获取视频详情（发布时间/点赞数/时长/分区），使用 B站公开 API。
 
-        失败静默忽略（超时/限速不影响主采集流程），返回 {bvid: iso_date}。
+        失败静默忽略，返回 {bvid: {published_at, like_count, duration, category}}。
         """
         session = retry_session()
-        result: dict[str, str] = {}
+        result: dict[str, dict] = {}
         for bvid in bvids:
             try:
                 resp = session.get(
@@ -177,10 +186,16 @@ class BilibiliSearchCollector(CDPCollector):
                     params={"bvid": bvid},
                     headers=_HEADERS, timeout=8,
                 )
-                if resp.status_code == 200 and resp.json().get("code") == 0:
-                    pubdate = resp.json().get("data", {}).get("pubdate")
-                    if pubdate:
-                        result[bvid] = _ts_to_iso(pubdate)
+                if resp.status_code == 200:
+                    data = resp.json().get("data", {})
+                    if resp.json().get("code") == 0 and data:
+                        stat = data.get("stat", {})
+                        result[bvid] = {
+                            "published_at": _ts_to_iso(data.get("pubdate")),
+                            "like_count":   stat.get("like"),
+                            "duration":     data.get("duration"),
+                            "category":     data.get("tname"),
+                        }
             except Exception:
                 pass
         return result
