@@ -31,7 +31,12 @@ def upsert_video(video: dict) -> str:
     cols = list(row.keys())
     placeholders = ", ".join(["?"] * len(cols))
     update_cols = [c for c in cols if c not in ("content_hash", "created_at", "fetched_at")]
-    update_set = ", ".join(f"{c} = excluded.{c}" for c in update_cols)
+    # 这几个字段用 COALESCE：新值为 NULL 时保留 DB 里的已知值（防止 API 失败导致数据回退）
+    _coalesce = {"published_at", "like_count", "duration", "category"}
+    update_set = ", ".join(
+        f"{c} = COALESCE(excluded.{c}, {c})" if c in _coalesce else f"{c} = excluded.{c}"
+        for c in update_cols
+    )
     sql = (
         f"INSERT INTO videos ({', '.join(cols)}) VALUES ({placeholders})"
         f" ON CONFLICT(content_hash) DO UPDATE SET {update_set}"
@@ -64,7 +69,11 @@ def upsert_videos(videos: list[dict]) -> dict[str, int]:
                 cols = list(row.keys())
                 placeholders = ", ".join(["?"] * len(cols))
                 update_cols = [c for c in cols if c not in ("content_hash", "created_at", "fetched_at")]
-                update_set = ", ".join(f"{c} = excluded.{c}" for c in update_cols)
+                _coalesce = {"published_at", "like_count", "duration", "category"}
+                update_set = ", ".join(
+                    f"{c} = COALESCE(excluded.{c}, {c})" if c in _coalesce else f"{c} = excluded.{c}"
+                    for c in update_cols
+                )
                 sql = (
                     f"INSERT INTO videos ({', '.join(cols)}) VALUES ({placeholders})"
                     f" ON CONFLICT(content_hash) DO UPDATE SET {update_set}"
