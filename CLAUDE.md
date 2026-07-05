@@ -112,8 +112,11 @@ python run_topic.py --topic funny
 # AI视频墙
 python run_topic.py --topic ai
 
-# 定时调度（每6小时）
-python scripts/scheduler.py --interval 6
+# 立即执行一次全链路（采集+打标签+生成+推送）
+python scripts/scheduler.py --once
+
+# 只重新生成+推送，不采集
+python scripts/scheduler.py --once --no-collect
 ```
 
 ## 输出文件

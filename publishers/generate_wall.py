@@ -118,7 +118,6 @@ def _format_age(published_at: str | None) -> str:
     if not published_at:
         return ""
     try:
-        from datetime import datetime, timezone
         pub = datetime.fromisoformat(published_at)
         if pub.tzinfo is None:
             pub = pub.replace(tzinfo=timezone.utc)
@@ -193,7 +192,6 @@ def _render_card(v: dict) -> str:
     # 发布时间：计算相对标签和天数（用于筛选）
     age_label = _format_age(v.get("published_at"))
     try:
-        from datetime import datetime, timezone
         pub = v.get("published_at")
         if pub:
             dt = datetime.fromisoformat(pub)
