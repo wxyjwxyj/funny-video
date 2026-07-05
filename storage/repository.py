@@ -15,7 +15,9 @@ def get_db():
 def upsert_video(video: dict) -> str:
     """插入或更新一条视频（按 content_hash 去重）。
 
-    冲突时更新除 created_at 之外的所有字段（封面/播放量等会变化）。
+    冲突时更新封面/播放量/点赞等动态字段，但保留 created_at 和 fetched_at。
+    保留 fetched_at 是关键：热门视频每天都会被采集器重新抓到，若刷新
+    fetched_at 则视频会在视频墙每天重复出现；锁住首次采集时间可避免此问题。
     extra/tags 字段自动序列化为 JSON 字符串。
 
     Returns:
@@ -28,14 +30,7 @@ def upsert_video(video: dict) -> str:
 
     cols = list(row.keys())
     placeholders = ", ".join(["?"] * len(cols))
-    update_cols = [c for c in cols if c not in ("content_hash", "created_at")]
-    update_set = ", ".join(f"{c} = excluded.{c}" for c in update_cols)
-
-    sql = f"""
-        INSERT INTO videos ({', '.join(cols)})
-        VALUES ({placeholders})
-        ON CONFLICT(content_hash) DO UPDATE SET {update_set}
-    """
+    update_cols = [c for c in cols if c not in ("content_hash", "created_at", "fetched_at")]
 
     with contextlib.closing(get_db()) as conn:
         with conn:  # 同一事务内 SELECT + INSERT，SQLite 写锁保证原子性
@@ -63,7 +58,7 @@ def upsert_videos(videos: list[dict]) -> dict[str, int]:
 
                 cols = list(row.keys())
                 placeholders = ", ".join(["?"] * len(cols))
-                update_cols = [c for c in cols if c not in ("content_hash", "created_at")]
+                update_cols = [c for c in cols if c not in ("content_hash", "created_at", "fetched_at")]
                 update_set = ", ".join(f"{c} = excluded.{c}" for c in update_cols)
                 sql = (
                     f"INSERT INTO videos ({', '.join(cols)}) VALUES ({placeholders})"
