@@ -82,7 +82,7 @@ class BilibiliPopularCollector(BaseCollector):
         # pubdate 是 Unix 时间戳，转为 ISO8601 存储
         v = make_video(
             platform="bilibili", platform_video_id=bvid,
-            content_hash_prefix="bilibili", topic=self.topic,
+            content_hash_prefix=self.content_hash_prefix or "bilibili", topic=self.topic,
             title=item.get("title", ""),
             author=owner.get("name", ""),
             author_id=str(owner.get("mid", "")),
@@ -101,7 +101,7 @@ class BilibiliPopularCollector(BaseCollector):
                 "rcmd_reason": item.get("rcmd_reason", {}).get("content", ""),
             },
         )
-        v["content_hash"] = f"bilibili:{bvid}"
+        v["content_hash"] = f"{self.content_hash_prefix or 'bilibili'}:{bvid}"
         return v
 
 
@@ -146,6 +146,44 @@ class BilibiliSearchCollector(CDPCollector):
         self._navigate(url)
         items = self._eval(self._EXTRACT_JS, timeout=15) or []
         return items[:self.per_keyword]
+
+    def collect(self) -> list[dict]:
+        """采集后批量补全 published_at（CDP DOM 无法直接获取发布时间）。"""
+        results = super().collect()
+        if not results:
+            return results
+        # 找出所有还没有 published_at 的视频，批量向 B站 API 补
+        missing = [v["platform_video_id"] for v in results if not v.get("published_at")]
+        if missing:
+            logger.info("[BilibiliSearch] 补全 published_at: %d 条", len(missing))
+            pubdates = self._fetch_pubdates(missing)
+            for v in results:
+                pid = v["platform_video_id"]
+                if pid in pubdates:
+                    v["published_at"] = pubdates[pid]
+        return results
+
+    def _fetch_pubdates(self, bvids: list[str]) -> dict[str, str]:
+        """批量获取视频发布时间，使用 B站公开 video info API。
+
+        失败静默忽略（超时/限速不影响主采集流程），返回 {bvid: iso_date}。
+        """
+        session = retry_session()
+        result: dict[str, str] = {}
+        for bvid in bvids:
+            try:
+                resp = session.get(
+                    "https://api.bilibili.com/x/web-interface/view",
+                    params={"bvid": bvid},
+                    headers=_HEADERS, timeout=8,
+                )
+                if resp.status_code == 200 and resp.json().get("code") == 0:
+                    pubdate = resp.json().get("data", {}).get("pubdate")
+                    if pubdate:
+                        result[bvid] = _ts_to_iso(pubdate)
+            except Exception:
+                pass
+        return result
 
     def _map_item(self, item: dict, keyword: str) -> dict | None:
         bvid = item.get("bvid", "")

@@ -153,9 +153,10 @@ def _render_featured_card(v: dict) -> str:
     page_url = _html.escape(_safe_url(v.get("page_url") or ""))
     cover_url = _html.escape(_safe_url(v.get("cover_url") or ""))
     platform = _html.escape(v.get("platform") or "")
+    vid = _html.escape(v.get("content_hash") or "")
     data_attr = f'data-embed="{embed}"' if embed else f'data-href="{page_url}"'
     return (
-        f'<div class="feat-card" {data_attr} data-platform="{platform}">'
+        f'<div class="feat-card" {data_attr} data-platform="{platform}" data-vid="{vid}">'
         f'<div class="feat-thumb">'
         f'<img loading="lazy" referrerpolicy="no-referrer" src="{cover_url}" alt="{title}">'
         f'<span class="feat-score">⭐ {score}</span>'
@@ -268,8 +269,9 @@ def generate(topic: str = "funny", min_score: int = 7, min_like_count: int = 0,
     sql += " AND date(fetched_at) = ?"
     params.append(date_str)
     if max_published_days is not None:
-        # published_at 为 NULL 的记录不过滤（兼容历史未采集发布时间的数据）
-        sql += " AND (published_at IS NULL OR published_at >= date('now', ?))"
+        # published_at IS NULL 不再放行：无法确认发布时间的视频同样过滤
+        # （搞笑 topic 不设 max_published_days，不受影响）
+        sql += " AND published_at >= date('now', ?)"
         params.append(f"-{max_published_days} days")
 
     with contextlib.closing(get_connection(_DB_PATH)) as conn:

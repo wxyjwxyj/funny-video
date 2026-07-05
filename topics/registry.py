@@ -68,7 +68,8 @@ def _build_topics() -> dict[str, TopicConfig]:
             display_name="🎬 搞笑视频墙",
             collectors=[
                 CollectorDef("bilibili_popular",
-                             {"pages": 5, "categories": FUNNY_CATEGORIES},
+                             {"pages": 5, "categories": FUNNY_CATEGORIES,
+                              "content_hash_prefix": "bilibili_funny"},
                              platform="bilibili"),
                 CollectorDef("bilibili_search",
                              {"keywords": _BILIBILI_FUNNY_KW,
