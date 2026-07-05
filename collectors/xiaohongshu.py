@@ -148,9 +148,3 @@ class XiaohongshuCollector(CDPCollector):
             published_at=published_at,
             extra={"search_keyword": keyword},
         )
-
-
-# ── 兼容旧入口 ─────────────────────────────────────────────────
-def fetch_popular(pages: int | None = None, keywords: list[str] | None = None,
-                  topic: str = "funny") -> list[dict]:
-    return XiaohongshuCollector(topic=topic, keywords=keywords or []).collect()

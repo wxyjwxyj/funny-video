@@ -88,9 +88,3 @@ class DouyinCollector(CDPCollector):
                    "share_count": stats.get("share_count"),
                    "search_keyword": keyword},
         )
-
-
-# ── 兼容旧入口 ─────────────────────────────────────────────────
-def fetch_popular(pages: int | None = None, keywords: list[str] | None = None,
-                  topic: str = "funny") -> list[dict]:
-    return DouyinCollector(topic=topic, keywords=keywords or []).collect()
