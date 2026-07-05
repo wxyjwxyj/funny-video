@@ -2,8 +2,5 @@
 # 避开 Mac 休眠时段：06:00/00:00 容易被 launchd 积压后跳过
 runs:
   - time: "08:00"
-    steps: [collect, tag, generate, push]
   - time: "13:00"
-    steps: [collect, tag, generate, push]
   - time: "19:00"
-    steps: [collect, tag, generate, push]
