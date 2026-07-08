@@ -7,7 +7,6 @@ from datetime import date as _date
 
 from collectors.bilibili import FUNNY_CATEGORIES
 from topics.config import CollectorDef, TopicConfig
-from utils.trending import fetch_douyin_trending
 
 # ── 关键词轮换 ────────────────────────────────────────────────
 # 每 GROUP_SIZE 个词为一组，按今日日期选当天用的组，4天轮一圈。
@@ -50,15 +49,14 @@ _XHS_AI_KW = ["Claude", "即梦AI", "AI绘画", "DeepSeek", "可灵AI", "ChatGPT
 
 
 def _douyin_funny_keywords() -> list[str]:
-    """当日抖音搜索词：热搜榜前5词 + 2个轮换搞笑词，共7词。
+    """当日抖音搜索词：从搞笑词池轮换取 3 个。
 
-    热搜词代表今天最热的话题，搞笑博主经常围绕热点出梗；
-    轮换词兜底，确保搜到的内容里有明确的搞笑内容。
-    失败时降级为纯轮换词。
+    早期设计用「热搜前5 + 轮换2」，想让搞笑博主围绕热点整活；但实测抖音热搜
+    多为新闻时政（洪水、颁奖等），搜出来是新闻而非搞笑内容，既污染 funny 池、
+    又浪费打标签成本。故改为纯搞笑词轮换，并控制在 3 词以内——
+    抖音对搜索频率有验证码风控，词越多越容易触发。
     """
-    trending = fetch_douyin_trending(top_n=5)
-    funny_rotation = _daily_rotate(_DOUYIN_FUNNY_KW_POOL, size=2)
-    return trending + funny_rotation if trending else _daily_rotate(_DOUYIN_FUNNY_KW_POOL)
+    return _daily_rotate(_DOUYIN_FUNNY_KW_POOL, size=3)
 
 
 def _build_topics() -> dict[str, TopicConfig]:
@@ -103,8 +101,9 @@ def _build_topics() -> dict[str, TopicConfig]:
             ],
             score_type="funny_score",
             min_score=5,
-            min_like_count=1000,
-            max_published_days=14,   # AI 内容时效性强，只展示近14天发布的
+            min_like_count=200,      # AI 内容 XHS 点赞普遍偏低，过滤明显无热度内容
+            # max_published_days 已移除：时效性由 fetched_at=今天 保证；
+            # XHS 高赞教程类内容发布日期偏老，14天限制会把今天采集到的好内容全部过滤掉
         ),
     }
 
