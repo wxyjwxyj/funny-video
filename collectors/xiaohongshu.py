@@ -141,7 +141,7 @@ class XiaohongshuCollector(CDPCollector):
 
         return make_video(
             platform="xiaohongshu", platform_video_id=note_id,
-            content_hash_prefix="xiaohongshu", topic=self.topic,
+            content_hash_prefix=self.content_hash_prefix, topic=self.topic,
             title=title, author=item.get("author", ""),
             cover_url=item.get("cover", ""), like_count=like_count,
             page_url=item.get("pageUrl", ""),

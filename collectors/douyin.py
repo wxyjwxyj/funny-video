@@ -183,7 +183,7 @@ Array.from(document.querySelectorAll('.search-result-card')).map(function(card){
             return None
         return make_video(
             platform="douyin", platform_video_id=vid,
-            content_hash_prefix="douyin", topic=self.topic,
+            content_hash_prefix=self.content_hash_prefix, topic=self.topic,
             title=title, author=item.get("author", ""),
             cover_url=item.get("cover", ""),
             duration=duration,

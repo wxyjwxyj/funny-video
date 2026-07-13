@@ -117,7 +117,7 @@ header {
 .featured-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
 .feat-card {
-  flex-shrink: 0; width: 200px; cursor: pointer;
+  flex-shrink: 0; width: 230px; cursor: pointer;
   border-radius: 10px; overflow: hidden;
   background: var(--surface); box-shadow: var(--shadow-card);
   transition: transform .2s cubic-bezier(.34,1.3,.64,1), box-shadow .2s;
@@ -199,6 +199,16 @@ header {
   transition: transform .35s cubic-bezier(.25,.46,.45,.94);
 }
 .card:hover .thumb img { transform: scale(1.06); }
+
+/* 图片加载失败占位 */
+.thumb.no-img, .feat-thumb.no-img { background: var(--surface-3); }
+.thumb.no-img img, .feat-thumb.no-img img { display: none; }
+.thumb.no-img::after, .feat-thumb.no-img::after {
+  content: '▶';
+  position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 30px; opacity: .18;
+}
 
 /* 左上角平台角标 */
 .platform-icon {
@@ -445,6 +455,8 @@ document.querySelectorAll('.feat-card').forEach(card => {
 
 // 过滤（多维度独立切换：评分单选，平台/新鲜度/分区独立开关，可组合）
 const cards = [...document.querySelectorAll('.card')];
+const featuredCards = [...document.querySelectorAll('.feat-card')];
+const featuredSection = document.querySelector('.featured');
 const emptyEl = document.getElementById('empty');
 
 let fScore   = 0;     // 评分下限（0=全部）
@@ -452,17 +464,27 @@ let fMaxAge  = null;  // 发布天数上限（null=不限）
 let fPlatform = '';   // 平台（''=全部）
 let fCat     = '';    // 分区（''=全部）
 
+function matchesFilter(c) {
+  return (fScore === 0 || parseInt(c.dataset.score ?? '0') >= fScore)
+    && (fMaxAge === null || parseInt(c.dataset.age ?? '9999') <= fMaxAge)
+    && (fPlatform === '' || c.dataset.platform === fPlatform)
+    && (fCat === '' || c.dataset.cat === fCat);
+}
+
 function applyFilter() {
   let visible = 0;
   cards.forEach(c => {
-    const show =
-      (fScore === 0 || parseInt(c.dataset.score ?? '0') >= fScore)
-      && (fMaxAge === null || parseInt(c.dataset.age ?? '9999') <= fMaxAge)
-      && (fPlatform === '' || c.dataset.platform === fPlatform)
-      && (fCat === '' || c.dataset.cat === fCat);
+    const show = matchesFilter(c);
     c.style.display = show ? '' : 'none';
     if (show) visible++;
   });
+  let featuredVisible = 0;
+  featuredCards.forEach(c => {
+    const show = matchesFilter(c);
+    c.style.display = show ? '' : 'none';
+    if (show) featuredVisible++;
+  });
+  if (featuredSection) featuredSection.style.display = featuredVisible === 0 ? 'none' : '';
   emptyEl.style.display = visible === 0 ? 'block' : 'none';
 }
 

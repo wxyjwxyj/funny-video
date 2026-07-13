@@ -137,6 +137,19 @@ def _format_age(published_at: str | None) -> str:
         return ""
 
 
+def _age_days(published_at: str | None) -> int:
+    """返回视频发布距今天数；未知或格式异常时返回大值供前端筛除。"""
+    if not published_at:
+        return 9999
+    try:
+        pub = datetime.fromisoformat(published_at)
+        if pub.tzinfo is None:
+            pub = pub.replace(tzinfo=timezone.utc)
+        return (datetime.now(timezone.utc) - pub).days
+    except (TypeError, ValueError):
+        return 9999
+
+
 def _safe_url(url: str) -> str:
     """过滤非 http(s) URL，防止 javascript: 注入。"""
     url = (url or "").strip()
@@ -150,13 +163,16 @@ def _render_featured_card(v: dict) -> str:
     embed = _html.escape(_safe_url(v.get("embed_url") or ""))
     page_url = _html.escape(_safe_url(v.get("page_url") or ""))
     cover_url = _html.escape(_safe_url(v.get("cover_url") or ""))
+    category = _html.escape(v.get("category") or "")
     platform = _html.escape(v.get("platform") or "")
     vid = _html.escape(v.get("content_hash") or "")
+    age_days = _age_days(v.get("published_at"))
     data_attr = f'data-embed="{embed}"' if embed else f'data-href="{page_url}"'
     return (
-        f'<div class="feat-card" {data_attr} data-platform="{platform}" data-vid="{vid}">'
+        f'<div class="feat-card" {data_attr} data-score="{score}" data-cat="{category}" '
+        f'data-platform="{platform}" data-age="{age_days}" data-vid="{vid}">'
         f'<div class="feat-thumb">'
-        f'<img loading="lazy" referrerpolicy="no-referrer" src="{cover_url}" alt="{title}">'
+        f'<img loading="lazy" referrerpolicy="no-referrer" src="{cover_url}" alt="" onerror="this.closest(\'.feat-thumb\').classList.add(\'no-img\')">'
         f'<span class="feat-score">⭐ {score}</span>'
         f'</div>'
         f'<div class="feat-title">{title}</div>'
@@ -191,24 +207,14 @@ def _render_card(v: dict) -> str:
 
     # 发布时间：计算相对标签和天数（用于筛选）
     age_label = _format_age(v.get("published_at"))
-    try:
-        pub = v.get("published_at")
-        if pub:
-            dt = datetime.fromisoformat(pub)
-            if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=timezone.utc)
-            age_days = (datetime.now(timezone.utc) - dt).days
-        else:
-            age_days = 9999
-    except Exception:
-        age_days = 9999
+    age_days = _age_days(v.get("published_at"))
 
     age_html = f'<span class="pub-age">{age_label}</span>' if age_label else ""
 
     return (
         f'<div class="card" {data_attr} data-score="{score}" data-cat="{category}" data-platform="{platform}" data-age="{age_days}" data-vid="{vid}">'
         f'<div class="thumb">'
-        f'<img loading="lazy" referrerpolicy="no-referrer" src="{cover_url}" alt="{title}">'
+        f'<img loading="lazy" referrerpolicy="no-referrer" src="{cover_url}" alt="" onerror="this.closest(\'.thumb\').classList.add(\'no-img\')">'
         f'<span class="platform-icon">{platform_label}</span>'
         f'<span class="score-badge {score_cls}">{score_icon} {score}</span>'
         f'</div>'
@@ -231,7 +237,8 @@ def generate(topic: str = "funny", min_score: int = 7, min_like_count: int = 0,
              output: Path | None = None,
              date: str | None = None, display_name: str | None = None,
              max_published_days: int | None = None,
-             archive_dir: Path | None = None) -> Path:
+             archive_dir: Path | None = None,
+             update_index: bool = True) -> Path:
     """生成视频墙 HTML 文件。
 
     Args:
@@ -243,6 +250,7 @@ def generate(topic: str = "funny", min_score: int = 7, min_like_count: int = 0,
         display_name: 页面标题，不传则从 topic 推导
         max_published_days: 只展示最近 N 天内发布的内容（None=不限）
         archive_dir: 归档目录（None=自动，用于测试隔离）
+        update_index: 是否更新项目首页时间戳；测试或临时输出时可关闭
     """
     init_db(_DB_PATH)
 
@@ -302,7 +310,7 @@ def generate(topic: str = "funny", min_score: int = 7, min_like_count: int = 0,
         if c:
             cat_count[c] = cat_count.get(c, 0) + 1
     cat_buttons = "".join(
-        f'<button data-min="0" data-cat="{_html.escape(c)}">{_html.escape(c)}</button>'
+        f'<button data-cat="{_html.escape(c)}">{_html.escape(c)}</button>'
         for c, cnt in sorted(cat_count.items(), key=lambda x: -x[1])
         if cnt >= 2
     )
@@ -332,7 +340,8 @@ def generate(topic: str = "funny", min_score: int = 7, min_like_count: int = 0,
     logger.info("generate_wall: 已写入 %s（%d 条，日期=%s）", out, len(videos), date_str)
 
     # 更新首页 index.html 的副标题时间戳
-    _update_index_time(now)
+    if update_index:
+        _update_index_time(now)
 
     # 每次生成同步存档到 archive/YYYY-MM-DD.html
     arc_dir.mkdir(exist_ok=True)

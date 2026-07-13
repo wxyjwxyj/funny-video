@@ -5,6 +5,23 @@ from pathlib import Path
 
 SCHEMA_PATH = Path(__file__).with_name("schema.sql")
 
+_TOPIC_HASH_MIGRATION = """
+DELETE FROM videos
+WHERE platform IN ('douyin', 'xiaohongshu')
+  AND content_hash = platform || ':' || platform_video_id
+  AND EXISTS (
+      SELECT 1 FROM videos AS scoped
+      WHERE scoped.content_hash = videos.platform || '_' ||
+            COALESCE(NULLIF(videos.topic, ''), 'funny') || ':' || videos.platform_video_id
+  );
+
+UPDATE videos
+SET content_hash = platform || '_' || COALESCE(NULLIF(topic, ''), 'funny') || ':' || platform_video_id,
+    topic = COALESCE(NULLIF(topic, ''), 'funny')
+WHERE platform IN ('douyin', 'xiaohongshu')
+  AND content_hash = platform || ':' || platform_video_id;
+"""
+
 
 def get_connection(db_path: Path | str) -> sqlite3.Connection:
     """获取数据库连接，开启外键约束并设置字典工厂。
@@ -26,3 +43,6 @@ def init_db(db_path: Path | str) -> None:
         with open(SCHEMA_PATH, "r", encoding="utf-8") as f:
             with conn:
                 conn.executescript(f.read())
+                # 旧版抖音/小红书哈希未包含 topic，两个视频墙会互相覆盖。
+                # 迁移幂等；新安装没有匹配行，不产生额外影响。
+                conn.executescript(_TOPIC_HASH_MIGRATION)

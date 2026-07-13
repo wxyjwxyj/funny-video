@@ -142,28 +142,57 @@ def _cleanup_old_videos() -> None:
 
 def _push_walls() -> None:
     changed: set[str] = set()
-    for args in (["git", "diff", "--name-only"], ["git", "diff", "--cached", "--name-only"]):
+    commands = (
+        ["git", "diff", "--name-only"],
+        ["git", "diff", "--cached", "--name-only"],
+        ["git", "ls-files", "--others", "--exclude-standard"],
+    )
+    for args in commands:
         r = subprocess.run(args, capture_output=True, text=True, cwd=_ROOT)
+        if r.returncode != 0:
+            message = f"Git 状态检查失败: {r.stderr.strip()}"
+            logger.error(message)
+            _notify("搞笑视频墙 ⚠️", message)
+            raise RuntimeError(message)
         changed.update(f for f in r.stdout.strip().split("\n") if f)
 
-    targets = [f for f in changed if any(f == p or f.startswith(p) for p in _EXPECTED_FILES)]
+    targets = sorted(
+        f for f in changed if any(f == p or f.startswith(p) for p in _EXPECTED_FILES)
+    )
     if not targets:
         logger.info("无视频墙文件变更，跳过推送")
         return
 
     logger.info("推送文件: %s", targets)
-    subprocess.run(["git", "add"] + targets, cwd=_ROOT, check=False)
+    add = subprocess.run(
+        ["git", "add"] + targets, cwd=_ROOT, capture_output=True, text=True,
+    )
+    if add.returncode != 0:
+        message = f"git add 失败: {add.stderr.strip()}"
+        logger.error(message)
+        _notify("搞笑视频墙 ⚠️", message)
+        raise RuntimeError(message)
+
     result = subprocess.run(
         ["git", "commit", "-m", f"content: {time.strftime('%Y-%m-%d')} video walls --auto"],
         capture_output=True, text=True, cwd=_ROOT,
     )
-    if "nothing to commit" in (result.stdout + result.stderr):
+    commit_output = result.stdout + result.stderr
+    if result.returncode != 0 and "nothing to commit" in commit_output.lower():
         logger.info("无实际变更，跳过 commit")
         return
+    if result.returncode != 0:
+        message = f"git commit 失败: {commit_output.strip()}"
+        logger.error(message)
+        _notify("搞笑视频墙 ⚠️", message)
+        raise RuntimeError(message)
+
     push = subprocess.run(["git", "push"], cwd=_ROOT, capture_output=True, text=True)
     if push.returncode != 0:
-        logger.error("GitHub Pages 推送失败: %s", push.stderr.strip())
+        message = f"GitHub Pages 推送失败: {push.stderr.strip()}"
+        logger.error(message)
         _notify("搞笑视频墙 ⚠️", f"push 失败，下次运行会重试")
+        raise RuntimeError(message)
     else:
         logger.info("GitHub Pages 推送完成")
 
@@ -246,8 +275,8 @@ def main() -> None:
     if not _preflight_check():
         sys.exit(1)
 
-    _mark_ran(matched["time"], now)
     run_all()
+    _mark_ran(matched["time"], now)
 
 
 if __name__ == "__main__":

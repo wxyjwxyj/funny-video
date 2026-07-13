@@ -7,6 +7,33 @@ from storage.db import get_connection
 
 _DB_PATH = Path(__file__).parent.parent / "video.db"
 
+# 冲突更新只刷新采集侧的动态元数据。以下字段属于视频身份、AI 处理结果或
+# 用户交互状态，重新采集时必须保留；对应状态应走专用更新函数修改。
+_PRESERVE_ON_CONFLICT = {
+    "topic", "platform", "platform_video_id", "content_hash",
+    "tags", "funny_score", "status", "is_unsafe", "is_liked", "is_watched",
+    "created_at", "fetched_at",
+}
+_COALESCE_ON_CONFLICT = {"published_at", "like_count", "duration", "category"}
+
+
+def _build_upsert(row: dict) -> tuple[str, list]:
+    """构造 videos upsert SQL 与参数，统一单条和批量写入规则。"""
+    cols = list(row.keys())
+    placeholders = ", ".join(["?"] * len(cols))
+    update_cols = [c for c in cols if c not in _PRESERVE_ON_CONFLICT]
+    update_set = ", ".join(
+        f"{c} = COALESCE(excluded.{c}, {c})" if c in _COALESCE_ON_CONFLICT
+        else f"{c} = excluded.{c}"
+        for c in update_cols
+    )
+    sql = f"INSERT INTO videos ({', '.join(cols)}) VALUES ({placeholders})"
+    if update_set:
+        sql += f" ON CONFLICT(content_hash) DO UPDATE SET {update_set}"
+    else:
+        sql += " ON CONFLICT(content_hash) DO NOTHING"
+    return sql, [row[c] for c in cols]
+
 
 def get_db():
     return get_connection(_DB_PATH)
@@ -28,26 +55,14 @@ def upsert_video(video: dict) -> str:
         if isinstance(row.get(field), (dict, list)):
             row[field] = json.dumps(row[field], ensure_ascii=False)
 
-    cols = list(row.keys())
-    placeholders = ", ".join(["?"] * len(cols))
-    update_cols = [c for c in cols if c not in ("content_hash", "created_at", "fetched_at")]
-    # 这几个字段用 COALESCE：新值为 NULL 时保留 DB 里的已知值（防止 API 失败导致数据回退）
-    _coalesce = {"published_at", "like_count", "duration", "category"}
-    update_set = ", ".join(
-        f"{c} = COALESCE(excluded.{c}, {c})" if c in _coalesce else f"{c} = excluded.{c}"
-        for c in update_cols
-    )
-    sql = (
-        f"INSERT INTO videos ({', '.join(cols)}) VALUES ({placeholders})"
-        f" ON CONFLICT(content_hash) DO UPDATE SET {update_set}"
-    )
+    sql, params = _build_upsert(row)
 
     with contextlib.closing(get_db()) as conn:
         with conn:  # 同一事务内 SELECT + INSERT，SQLite 写锁保证原子性
             exists = conn.execute(
                 "SELECT 1 FROM videos WHERE content_hash=?", (row["content_hash"],)
             ).fetchone()
-            conn.execute(sql, [row[c] for c in cols])
+            conn.execute(sql, params)
             return "updated" if exists else "inserted"
 
 
@@ -66,22 +81,11 @@ def upsert_videos(videos: list[dict]) -> dict[str, int]:
                     if isinstance(row.get(field), (dict, list)):
                         row[field] = json.dumps(row[field], ensure_ascii=False)
 
-                cols = list(row.keys())
-                placeholders = ", ".join(["?"] * len(cols))
-                update_cols = [c for c in cols if c not in ("content_hash", "created_at", "fetched_at")]
-                _coalesce = {"published_at", "like_count", "duration", "category"}
-                update_set = ", ".join(
-                    f"{c} = COALESCE(excluded.{c}, {c})" if c in _coalesce else f"{c} = excluded.{c}"
-                    for c in update_cols
-                )
-                sql = (
-                    f"INSERT INTO videos ({', '.join(cols)}) VALUES ({placeholders})"
-                    f" ON CONFLICT(content_hash) DO UPDATE SET {update_set}"
-                )
+                sql, params = _build_upsert(row)
                 exists = conn.execute(
                     "SELECT 1 FROM videos WHERE content_hash=?", (row["content_hash"],)
                 ).fetchone()
-                conn.execute(sql, [row[c] for c in cols])
+                conn.execute(sql, params)
                 counts["updated" if exists else "inserted"] += 1
 
     return counts

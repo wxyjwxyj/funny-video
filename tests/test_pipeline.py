@@ -7,6 +7,8 @@ from storage.db import init_db, get_connection
 from storage import repository
 from pipeline import dedup
 from collectors.bilibili import BilibiliPopularCollector, fetch_popular
+from collectors.douyin import DouyinCollector
+from collectors.xiaohongshu import XiaohongshuCollector
 
 _collector = BilibiliPopularCollector(topic="funny")
 
@@ -47,6 +49,17 @@ def test_map_video_prefix_override():
     collector_funny = BilibiliPopularCollector(topic="funny", content_hash_prefix="bilibili_funny")
     v = collector_funny._map(_SAMPLE_ITEM)
     assert v["content_hash"] == "bilibili_funny:BV1test12345"
+
+
+def test_cdp_collectors_prefix_override():
+    """抖音/小红书必须使用 registry 注入的 topic 级哈希前缀。"""
+    douyin = DouyinCollector(topic="ai", content_hash_prefix="douyin_ai")
+    dv = douyin._map_item({"vid": "123", "title": "AI 视频"}, "AI")
+    assert dv["content_hash"] == "douyin_ai:123"
+
+    xhs = XiaohongshuCollector(topic="funny", content_hash_prefix="xiaohongshu_funny")
+    xv = xhs._map_item({"noteId": "abc", "title": "搞笑视频", "likes": "10"}, "搞笑")
+    assert xv["content_hash"] == "xiaohongshu_funny:abc"
 
 
 def test_map_video_skip_ogv():
@@ -133,6 +146,55 @@ def test_upsert_coalesce_null(db_path):
         row = conn.execute("SELECT like_count, category FROM videos WHERE content_hash='bilibili:BVcoalesce'").fetchone()
     assert row["like_count"] == 9999, "like_count 不应被 NULL 覆盖"
     assert row["category"] == "搞笑", "category 不应被 NULL 覆盖"
+
+
+def test_recollect_preserves_ai_and_user_state(db_path):
+    """重新采集只更新动态元数据，不得清空评分、安全态或个人状态。"""
+    original = _make_video("BVstate", title="old")
+    repository.upsert_video(original)
+    repository.update_tags(original["content_hash"], ["危险"], 9, is_unsafe=True)
+    with contextlib.closing(get_connection(db_path)) as conn:
+        with conn:
+            conn.execute(
+                "UPDATE videos SET is_liked=1, is_watched=1 WHERE content_hash=?",
+                (original["content_hash"],),
+            )
+
+    refreshed = {**_make_video("BVstate", title="new"), "like_count": 9999}
+    dedup.run([refreshed])
+
+    with contextlib.closing(get_connection(db_path)) as conn:
+        row = conn.execute(
+            "SELECT title, like_count, tags, funny_score, status, is_unsafe, "
+            "is_liked, is_watched FROM videos WHERE content_hash=?",
+            (original["content_hash"],),
+        ).fetchone()
+    assert row["title"] == "new"
+    assert row["like_count"] == 9999
+    assert json.loads(row["tags"]) == ["危险"]
+    assert row["funny_score"] == 9
+    assert row["status"] == "inactive"
+    assert row["is_unsafe"] == 1
+    assert row["is_liked"] == 1
+    assert row["is_watched"] == 1
+
+
+def test_init_db_migrates_legacy_topic_hash(tmp_path):
+    """旧平台级哈希在下次初始化时迁移为 topic 级哈希。"""
+    dbfile = tmp_path / "legacy.db"
+    init_db(dbfile)
+    with contextlib.closing(get_connection(dbfile)) as conn:
+        with conn:
+            conn.execute(
+                "INSERT INTO videos(topic, platform, platform_video_id, content_hash) "
+                "VALUES('funny', 'douyin', '123', 'douyin:123')"
+            )
+
+    init_db(dbfile)
+
+    with contextlib.closing(get_connection(dbfile)) as conn:
+        row = conn.execute("SELECT content_hash FROM videos").fetchone()
+    assert row["content_hash"] == "douyin_funny:123"
 
 
 def test_upsert_extra_serialized(db_path):
