@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🎬 搞笑视频墙</title>
+<style>
+:root {
+  --bg: #f7f8fc;
+  --surface: #ffffff;
+  --surface-2: #f3f4f8;
+  --surface-3: #ebedf2;
+  --border: #e8eaed;
+  --text: #1a1a2e;
+  --text-sub: #6b7280;
+  --text-muted: #9ca3af;
+  --accent: #fb7299;
+  --accent-dim: rgba(251,114,153,.12);
+  --bili: #fb7299;
+  --douyin: #fe2c55;
+  --xhs: #ff2442;
+  --radius: 12px;
+  --header-grad: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --shadow-card: 0 1px 3px rgba(0,0,0,.07), 0 2px 8px rgba(0,0,0,.05);
+  --shadow-hover: 0 8px 24px rgba(251,114,153,.18), 0 0 0 1px rgba(251,114,153,.15);
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: -apple-system, system-ui, sans-serif; min-height: 100vh; }
+
+/* ── Header ── */
+header {
+  position: sticky; top: 0; z-index: 40;
+  background: var(--header-grad);
+  border-bottom: none;
+  padding: 0 24px;
+  display: flex; align-items: center; gap: 14px; height: 54px;
+}
+.back-link {
+  color: rgba(255,255,255,.75); text-decoration: none;
+  font-size: 13px; display: flex; align-items: center; gap: 4px;
+  white-space: nowrap; flex-shrink: 0;
+}
+.back-link:hover { color: #fff; }
+.header-title { font-size: 16px; font-weight: 700; letter-spacing: -.01em; white-space: nowrap; color: #fff; }
+.header-stats {
+  margin-left: auto; display: flex; gap: 8px; align-items: center; flex-shrink: 0;
+}
+.stat-badge {
+  background: rgba(255,255,255,.18); border: 1px solid rgba(255,255,255,.25);
+  border-radius: 20px; padding: 3px 10px;
+  font-size: 12px; color: rgba(255,255,255,.9);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.update-time { font-size: 12px; color: rgba(255,255,255,.65); white-space: nowrap; }
+
+/* ── Filters ── */
+.filters {
+  position: sticky; top: 54px; z-index: 30;
+  background: rgba(247,248,252,.95);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 24px;
+  display: flex; gap: 6px; flex-wrap: wrap; align-items: center;
+}
+.filter-sep { width: 1px; height: 18px; background: var(--border); margin: 0 4px; flex-shrink: 0; }
+.filters button {
+  padding: 5px 13px; border-radius: 20px;
+  border: 1px solid var(--border);
+  background: transparent; color: var(--text-sub);
+  cursor: pointer; font-size: 13px; line-height: 1;
+  transition: all .15s; white-space: nowrap;
+}
+.filters button:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+.filters button.active {
+  background: var(--accent); border-color: var(--accent);
+  color: #fff; font-weight: 600;
+  box-shadow: 0 0 14px rgba(251,114,153,.35);
+}
+.filters button[data-platform="douyin"].active   { background: var(--douyin); border-color: var(--douyin); box-shadow: 0 0 14px rgba(254,44,85,.35); }
+.filters button[data-platform="xiaohongshu"].active { background: var(--xhs); border-color: var(--xhs); box-shadow: 0 0 14px rgba(255,36,66,.35); }
+
+.like-btn {
+  background: none; border: none; cursor: pointer;
+  font-size: 15px; padding: 2px 4px; line-height: 1;
+  border-radius: 6px; flex-shrink: 0;
+  transition: transform .15s;
+}
+.like-btn:hover { transform: scale(1.25); }
+/* 已看：整张卡轻度褪色 + 右上角 "✓" 标记 */
+.card.watched { opacity: 0.55; }
+.card.watched .score-badge::after {
+  content: ' ✓'; font-size: 10px; color: #4ade80;
+}
+
+/* ── 精华条 ── */
+.featured {
+  padding: 14px 24px 6px;
+  border-bottom: 1px solid var(--border);
+}
+.featured-hd {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+}
+.featured-label { font-size: 13px; font-weight: 700; color: var(--text); }
+.featured-count {
+  font-size: 12px; color: var(--text-muted);
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: 12px; padding: 1px 8px;
+}
+.featured-scroll {
+  display: flex; gap: 12px;
+  overflow-x: auto; padding-bottom: 10px;
+  scrollbar-width: thin; scrollbar-color: var(--border) transparent;
+}
+.featured-scroll::-webkit-scrollbar { height: 4px; }
+.featured-scroll::-webkit-scrollbar-track { background: transparent; }
+.featured-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.feat-card {
+  flex-shrink: 0; width: 230px; cursor: pointer;
+  border-radius: 10px; overflow: hidden;
+  background: var(--surface); box-shadow: var(--shadow-card);
+  transition: transform .2s cubic-bezier(.34,1.3,.64,1), box-shadow .2s;
+}
+.feat-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 20px rgba(251,114,153,.2), 0 0 0 1px rgba(251,114,153,.12);
+}
+.feat-card[data-platform="bilibili"] { border-top: 2px solid var(--bili); }
+.feat-card[data-platform="douyin"]   { border-top: 2px solid var(--douyin); }
+.feat-card[data-platform="xiaohongshu"] { border-top: 2px solid var(--xhs); }
+.feat-card.watched { opacity: 0.55; }
+.feat-card.liked   { box-shadow: 0 0 0 2px var(--accent), var(--shadow-card); }
+.feat-thumb {
+  position: relative; width: 100%; aspect-ratio: 16/9;
+  background: var(--surface-3); overflow: hidden;
+}
+.feat-thumb img {
+  width: 100%; height: 100%; object-fit: cover;
+  transition: transform .35s ease;
+}
+.feat-card:hover .feat-thumb img { transform: scale(1.06); }
+.feat-score {
+  position: absolute; bottom: 6px; right: 6px;
+  background: rgba(255,255,255,.92); border-radius: 6px;
+  padding: 2px 6px; font-size: 11px; font-weight: 700; color: #fbbf24;
+}
+.feat-title {
+  padding: 7px 9px 9px;
+  font-size: 12px; line-height: 1.4; color: var(--text);
+  display: -webkit-box; -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical; overflow: hidden;
+}
+
+/* ── Grid ── */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  padding: 20px 24px 56px;
+}
+
+/* ── Card ── */
+.card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform .2s cubic-bezier(.34,1.3,.64,1), box-shadow .2s;
+  box-shadow: var(--shadow-card);
+  border: none;
+  position: relative;
+  display: flex; flex-direction: column;
+}
+.card:hover {
+  transform: translateY(-5px);
+  box-shadow: var(--shadow-hover);
+}
+/* 平台色条 */
+.card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0;
+  height: 3px; z-index: 2;
+  background: var(--border);
+}
+.card[data-platform="bilibili"]::before { background: var(--bili); }
+.card[data-platform="douyin"]::before   { background: var(--douyin); }
+.card[data-platform="xiaohongshu"]::before { background: var(--xhs); }
+
+/* 缩略图 */
+.thumb {
+  position: relative; width: 100%;
+  aspect-ratio: 16/9; background: var(--surface-3);
+  overflow: hidden;
+}
+.thumb img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  object-position: top;      /* 小红书/抖音竖版封面优先显示顶部文字区 */
+  transition: transform .35s cubic-bezier(.25,.46,.45,.94);
+}
+.card:hover .thumb img { transform: scale(1.06); }
+
+/* 图片加载失败占位 */
+.thumb.no-img, .feat-thumb.no-img { background: var(--surface-3); }
+.thumb.no-img img, .feat-thumb.no-img img { display: none; }
+.thumb.no-img::after, .feat-thumb.no-img::after {
+  content: '▶';
+  position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 30px; opacity: .18;
+}
+
+/* 左上角平台角标 */
+.platform-icon {
+  position: absolute; top: 8px; left: 8px; z-index: 3;
+  background: rgba(255,255,255,.9);
+  backdrop-filter: blur(4px);
+  border-radius: 6px; padding: 2px 7px;
+  font-size: 11px; font-weight: 600; color: var(--text-sub);
+}
+.card[data-platform="bilibili"] .platform-icon { color: var(--bili); }
+.card[data-platform="douyin"] .platform-icon   { color: var(--douyin); }
+.card[data-platform="xiaohongshu"] .platform-icon { color: var(--xhs); }
+
+/* 右下角评分徽章 */
+.score-badge {
+  position: absolute; bottom: 8px; right: 8px; z-index: 3;
+  background: rgba(255,255,255,.9);
+  backdrop-filter: blur(4px);
+  border-radius: 8px; padding: 3px 8px;
+  font-size: 12px; font-weight: 700;
+  display: flex; align-items: center; gap: 3px;
+}
+.score-badge.s9 { color: #fbbf24; }
+.score-badge.s8 { color: #4ade80; }
+.score-badge.s7 { color: var(--text-sub); }
+
+/* 卡片内容 */
+.card-body { padding: 12px 13px 13px; flex: 1; display: flex; flex-direction: column; gap: 7px; }
+.title {
+  font-size: 14px; font-weight: 500; line-height: 1.45; color: var(--text);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.card-meta {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; color: var(--text-muted);
+}
+.author { color: var(--text-sub); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
+.stats { display: flex; gap: 8px; flex-shrink: 0; }
+.tags { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 2px; }
+.tag {
+  background: var(--surface-2); border: 1px solid var(--border);
+  padding: 2px 8px; border-radius: 6px;
+  color: var(--text-sub); font-size: 11px;
+}
+.pub-age {
+  font-size: 11px; color: var(--text-muted);
+  white-space: nowrap; flex-shrink: 0;
+}
+
+/* ── 空状态 ── */
+.empty {
+  display: none; grid-column: 1/-1;
+  text-align: center; padding: 80px 24px; color: var(--text-muted);
+}
+.empty .icon { font-size: 48px; margin-bottom: 12px; }
+.empty p { font-size: 15px; }
+
+/* ── 播放弹窗 ── */
+.play-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.88);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 100;
+  animation: overlay-in .18s ease;
+}
+.play-overlay.hidden { display: none; }
+@keyframes overlay-in { from { opacity: 0; } to { opacity: 1; } }
+
+.player-wrap {
+  width: min(900px, 94vw);
+  animation: player-in .22s cubic-bezier(.34,1.3,.64,1);
+}
+@keyframes player-in { from { transform: scale(.93); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.player-aspect { aspect-ratio: 16/9; }
+.player-aspect iframe { width: 100%; height: 100%; border: none; border-radius: 10px; box-shadow: 0 24px 80px rgba(0,0,0,.8); }
+
+.player-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 2px 0; gap: 12px;
+}
+.player-title {
+  font-size: 14px; color: rgba(255,255,255,.7);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.close-btn {
+  width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
+  background: rgba(255,255,255,.1); border: none;
+  color: #fff; font-size: 16px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background .15s;
+}
+.close-btn:hover { background: rgba(255,255,255,.22); }
+</style>
+</head>
+<body>
+<header>
+  <a href="index.html" class="back-link">← 首页</a>
+  <span class="header-title">🎬 搞笑视频墙</span>
+  <div class="header-stats">
+    <span class="stat-badge">2026-07-13</span>
+    <span class="stat-badge">67 条</span>
+    <span class="update-time">更新 2026-07-13 19:02:28</span>
+  </div>
+</header>
+<div class="filters" id="filters">
+  <button class="active" data-min="0">全部</button>
+  <button data-min="7">7+ 分</button>
+  <button data-min="9">✨ 精选</button>
+  <div class="filter-sep"></div>
+  <button data-max-age="7">🆕 近7天</button>
+  <div class="filter-sep"></div>
+  <button data-platform="bilibili">B站</button><button data-platform="douyin">抖音</button><button data-platform="xiaohongshu">小红书</button>
+  <div class="filter-sep"></div>
+  <button data-cat="日常">日常</button><button data-cat="搞笑">搞笑</button><button data-cat="小剧场">小剧场</button><button data-cat="手工">手工</button>
+</div>
+<section class="featured"><div class="featured-hd"><span class="featured-label">⭐ 今日精选</span><span class="featured-count">14 条</span></div><div class="featured-scroll"><div class="feat-card" data-href="https://www.xiaohongshu.com/search_result/698ef4ef000000000a02c943?xsec_token=ABVorxMpWaR8gTETT97FIkuJK41IfbeC6k6eCXTp7j0Gw=&amp;xsec_source=" data-platform="xiaohongshu" data-vid="xiaohongshu:698ef4ef000000000a02c943"><div class="feat-thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://sns-webpic-qc.xhscdn.com/202607131901/d448375b9dca1f081c0d5c4513a8e1dd/1040g00831sh9k8ghlc005pskurm396a97j5hdg8!nc_n_webp_prv_1" alt="" onerror="this.closest('.feat-thumb').classList.add('no-img')"><span class="feat-score">⭐ 9</span></div><div class="feat-title">这期上强度了！</div></div>
+<div class="feat-card" data-href="https://www.xiaohongshu.com/search_result/6a051e9e00000000080026df?xsec_token=ABQ_5tTFxkhxFVxHAnAh_CT8yDyMYBH59QXEEl1WKeUNE=&amp;xsec_source=" data-platform="xiaohongshu" data-vid="xiaohongshu:6a051e9e00000000080026df"><div class="feat-thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://sns-webpic-qc.xhscdn.com/202607131355/a99943cc487e3bdf89c68ad53c172099/notes_pre_post/1040g3k83204m4fg6ii705qdh959t5lt7b9gclp0!nc_n_webp_prv_1" alt="" onerror="this.closest('.feat-thumb').classList.add('no-img')"><span class="feat-score">⭐ 9</span></div><div class="feat-title">职场会接话的重要性～</div></div>
+<div class="feat-card" data-href="https://www.xiaohongshu.com/search_result/69ddd40c000000001a03170d?xsec_token=ABVOdh1n72KrTFhS0LCEwK9es8IIMwd6kDvuofnFDpZi0=&amp;xsec_source=" data-platform="xiaohongshu" data-vid="xiaohongshu:69ddd40c000000001a03170d"><div class="feat-thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://sns-webpic-qc.xhscdn.com/202607131901/5bfb05cd294d5463d06ada2c8e99acca/spectrum/1040g34o31uuabbfd1m105nns30jgbv18lfqaoso!nc_n_webp_prv_1" alt="" onerror="this.closest('.feat-thumb').classList.add('no-img')"><span class="feat-score">⭐ 9</span></div><div class="feat-title">这些梗怎么做到又烂又好笑的呢</div></div>
+<div class="feat-card" data-href="https://www.douyin.com/video/7661088937222797541" data-platform="douyin" data-vid="douyin:7661088937222797541"><div class="feat-thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://p3-pc-sign.douyinpic.com/image-cut-tos-priv/8b9f68a4a6942838e29afd2fef79fd61~tplv-dy-resize-origshort-autoq-75:330.jpeg?biz_tag=pcweb_cover&amp;from=327834062&amp;lk3s=138a59ce&amp;s=PackSourceEnum_SEARCH&amp;sc=cover&amp;se=false&amp;x-expires=2099278800&amp;x-signature=pTkwp0%2Brm1V4vaKM2AxPc0Ny8hU%3D" alt="" onerror="this.closest('.feat-thumb').classList.add('no-img')"><span class="feat-score">⭐ 9</span></div><div class="feat-title">只要扛着一把梯子，就能出入各种公共场合 #梯子 #整活</div></div>
+<div class="feat-card" data-href="https://www.douyin.com/video/7654919899986642353" data-platform="douyin" data-vid="douyin:7654919899986642353"><div class="feat-thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://p3-pc-sign.douyinpic.com/image-cut-tos-priv/13ad27499c7ee6d2df28b27853964dcb~tplv-dy-resize-origshort-autoq-75:330.jpeg?biz_tag=pcweb_cover&amp;from=327834062&amp;lk3s=138a59ce&amp;s=PackSourceEnum_SEARCH&amp;sc=cover&amp;se=false&amp;x-expires=2099300400&amp;x-signature=8Um5l1QBzOeOjCNmUVH3T64bX5U%3D" alt="" onerror="this.closest('.feat-thumb').classList.add('no-img')"><span class="feat-score">⭐ 9</span></div><div class="feat-title">文化已被篡改 #二次元 #原创动画 #沙雕动画 #内容启发搜索#地球村动画</div></div>
+<div class="feat-card" data-href="https://www.douyin.com/video/7653283099232570687" data-platform="douyin" data-vid="douyin:7653283099232570687"><div class="feat-thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://p3-pc-sign.douyinpic.com/image-cut-tos-priv/9ad0a0dd13fac71f8126e0efaf11e21b~tplv-dy-resize-origshort-autoq-75:330.jpeg?biz_tag=pcweb_cover&amp;from=327834062&amp;lk3s=138a59ce&amp;s=PackSourceEnum_SEARCH&amp;sc=cover&amp;se=false&amp;x-expires=2099278800&amp;x-signature=z8BV6TMRlr6dVtJbMP20o02vLBQ%3D" alt="" onerror="this.closest('.feat-thumb').classList.add('no-img')"><span class="feat-score">⭐ 9</span></div><div class="feat-title">😋“鲁鲁逊漂流记”😋 #三角洲行动 #沙雕Sanscul #乌鲁鲁 #核电站 #沙雕动画</div></div>
+<div class="feat-card" data-href="https://www.douyin.com/video/7661182705215753507" data-platform="douyin" data-vid="douyin:7661182705215753507"><div class="feat-thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://p3-pc-sign.douyinpic.com/image-cut-tos-priv/c063f600e585f72a33d79258c1c9eaf0~tplv-dy-resize-origshort-autoq-75:330.jpeg?biz_tag=pcweb_cover&amp;from=327834062&amp;lk3s=138a59ce&amp;s=PackSourceEnum_SEARCH&amp;sc=cover&amp;se=false&amp;x-expires=2099300400&amp;x-signature=vx4ZKxWL5xrakD42krBXtr1XNUg%3D" alt="" onerror="this.closest('.feat-thumb').classList.add('no-img')"><span class="feat-score">⭐ 9</span></div><div class="feat-title">《花钱把自己关进了小黑屋》 #男人海洋 #改词翻唱 #搞笑配音 #万万没想到 #看一遍笑一遍</div></div>
+<div class="feat-card" data-href="https://www.douyin.com/video/7661267220898647306" data-platform="douyin" data-vid="douyin:7661267220898647306"><div class="feat-thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://p3-pc-sign.douyinpic.com/image-cut-tos-priv/f921aa3f46a11cf0b413ea6b5881ed82~tplv-dy-resize-origshort-autoq-75:330.jpeg?biz_tag=pcweb_cover&amp;from=327834062&amp;lk3s=138a59ce&amp;s=PackSourceEnum_SEARCH&amp;sc=cover&amp;se=false&amp;x-expires=2099278800&amp;x-signature=Pe%2Fao9Z5eV4CQggnO3ygZfN3CNs%3D" alt="" onerror="this.closest('.feat-thumb').classList.add('no-img')"><span class="feat-score">⭐ 9</span></div><div class="feat-title">葬爱姐妹，进宫速通选秀 #甄嬛传 #搞笑配音</div></div>
+<div class="feat-card" data-href="https://www.douyin.com/video/7661478800039832569" data-platform="douyin" data-vid="douyin:7661478800039832569"><div class="feat-thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://p3-pc-sign.douyinpic.com/tos-cn-i-0813c000-ce/owf7IBSDWufFCAims9FfQApFgAFLJUAhp0DQAE~tplv-dy-resize-origshort-autoq-75:330.jpeg?biz_tag=pcweb_cover&amp;from=327834062&amp;lk3s=138a59ce&amp;s=PackSourceEnum_SEARCH&amp;sc=cover&amp;se=false&amp;x-expires=2099300400&amp;x-signature=GVsv%2BY3zJ2vzj7BsFaJEcQF05Ug%3D" alt="" onerror="this.closest('.feat-thumb').classList.add('no-img')"><span class="feat-score">⭐ 9</span></div><div class="feat-title">我的兄弟为了去送外卖、好像把脑子给献祭了#搞笑配音 #脑洞大开 #发财梦 #神逻辑 #创作者伙伴计划</div></div>
+<div class="feat-card" data-embed="https://player.bilibili.com/player.html?bvid=BV1HDM76rEE8&amp;autoplay=0" data-platform="bilibili" data-vid="bilibili_funny:BV1HDM76rEE8"><div class="feat-thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://i1.hdslb.com/bfs/archive/faaea2ce9fc204088694836e77937065fe057945.jpg@672w_378h_1c_!web-search-common-cover" alt="" onerror="this.closest('.feat-thumb').classList.add('no-img')"><span class="feat-score">⭐ 9</span></div><div class="feat-title">【毕导】什么时候拿百大？今年高考能拿几分？800w粉丝读评论！</div></div>
+<div class="feat-card" data-embed="https://player.bilibili.com/player.html?bvid=BV16PNK6aEMf&amp;autoplay=0" data-platform="bilibili" data-vid="bilibili_funny:BV16PNK6aEMf"><div class="feat-thumb"><img loading="lazy" referrerpolicy="no-referrer" src="http://i2.hdslb.com/bfs/archive/56854ffadf17b24adb11105eb16b25582a85e4ec.jpg" alt="" onerror="this.closest('.feat-thumb').classList.add('no-img')"><span class="feat-score">⭐ 9</span></div><div class="feat-title">当我带着小精灵想办法让路人对coser说出真心话！</div></div>
+<div class="feat-card" data-embed="https://player.bilibili.com/player.html?bvid=BV191Nu6cEm9&amp;autoplay=0" data-platform="bilibili" data-vid="bilibili_funny:BV191Nu6cEm9"><div class="feat-thumb"><img loading="lazy" referrerpolicy="no-referrer" src="http://i1.hdslb.com/bfs/archive/f6aa3bee875fa8d72df73cf5ffa98c67e3b1b8b9.jpg" alt="" onerror="this.closest('.feat-thumb').classList.add('no-img')"><span class="feat-score">⭐ 9</span></div><div class="feat-title">我不知道你在笑什么？！</div></div>
+<div class="feat-card" data-embed="https://player.bilibili.com/player.html?bvid=BV196NT6dEf1&amp;autoplay=0" data-platform="bilibili" data-vid="bilibili_funny:BV196NT6dEf1"><div class="feat-thumb"><img loading="lazy" referrerpolicy="no-referrer" src="http://i2.hdslb.com/bfs/archive/e017c61944f0aa9a676b584005143e8d3ec2479e.jpg" alt="" onerror="this.closest('.feat-thumb').classList.add('no-img')"><span class="feat-score">⭐ 9</span></div><div class="feat-title">小时候带你打游戏的表哥</div></div>
+<div class="feat-card" data-embed="https://player.bilibili.com/player.html?bvid=BV1qLNg66ExY&amp;autoplay=0" data-platform="bilibili" data-vid="bilibili_funny:BV1qLNg66ExY"><div class="feat-thumb"><img loading="lazy" referrerpolicy="no-referrer" src="http://i0.hdslb.com/bfs/archive/61b641ce36e558094d76ef4ef2d5072cfd6509ca.jpg" alt="" onerror="this.closest('.feat-thumb').classList.add('no-img')"><span class="feat-score">⭐ 9</span></div><div class="feat-title">世界纪录</div></div></div></section>
+<div class="grid" id="grid">
+  <div class="card" data-href="https://www.xiaohongshu.com/search_result/698ef4ef000000000a02c943?xsec_token=ABVorxMpWaR8gTETT97FIkuJK41IfbeC6k6eCXTp7j0Gw=&amp;xsec_source=" data-score="9" data-cat="" data-platform="xiaohongshu" data-age="150" data-vid="xiaohongshu:698ef4ef000000000a02c943"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://sns-webpic-qc.xhscdn.com/202607131901/d448375b9dca1f081c0d5c4513a8e1dd/1040g00831sh9k8ghlc005pskurm396a97j5hdg8!nc_n_webp_prv_1" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">小红书</span><span class="score-badge s9">😂 9</span></div><div class="card-body"><div class="title">这期上强度了！</div><div class="card-meta"><span class="author"></span><span class="stats"><span class="pub-age">02/13</span><span>👍 3.5万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">高强度搞笑</span><span class="tag">爆笑挑战</span><span class="tag">喜剧升级</span></div></div></div>
+<div class="card" data-href="https://www.xiaohongshu.com/search_result/6a051e9e00000000080026df?xsec_token=ABQ_5tTFxkhxFVxHAnAh_CT8yDyMYBH59QXEEl1WKeUNE=&amp;xsec_source=" data-score="9" data-cat="" data-platform="xiaohongshu" data-age="60" data-vid="xiaohongshu:6a051e9e00000000080026df"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://sns-webpic-qc.xhscdn.com/202607131355/a99943cc487e3bdf89c68ad53c172099/notes_pre_post/1040g3k83204m4fg6ii705qdh959t5lt7b9gclp0!nc_n_webp_prv_1" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">小红书</span><span class="score-badge s9">😂 9</span></div><div class="card-body"><div class="title">职场会接话的重要性～</div><div class="card-meta"><span class="author"></span><span class="stats"><span class="pub-age">05/14</span><span>👍 12.7万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">职场技巧</span><span class="tag">高情商回复</span><span class="tag">接话艺术</span></div></div></div>
+<div class="card" data-href="https://www.xiaohongshu.com/search_result/69ddd40c000000001a03170d?xsec_token=ABVOdh1n72KrTFhS0LCEwK9es8IIMwd6kDvuofnFDpZi0=&amp;xsec_source=" data-score="9" data-cat="" data-platform="xiaohongshu" data-age="89" data-vid="xiaohongshu:69ddd40c000000001a03170d"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://sns-webpic-qc.xhscdn.com/202607131901/5bfb05cd294d5463d06ada2c8e99acca/spectrum/1040g34o31uuabbfd1m105nns30jgbv18lfqaoso!nc_n_webp_prv_1" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">小红书</span><span class="score-badge s9">😂 9</span></div><div class="card-body"><div class="title">这些梗怎么做到又烂又好笑的呢</div><div class="card-meta"><span class="author"></span><span class="stats"><span class="pub-age">04/15</span><span>👍 9.1万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">烂梗搞笑</span><span class="tag">幽默合集</span><span class="tag">搞笑梗</span></div></div></div>
+<div class="card" data-href="https://www.douyin.com/video/7661088937222797541" data-score="9" data-cat="" data-platform="douyin" data-age="2" data-vid="douyin:7661088937222797541"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://p3-pc-sign.douyinpic.com/image-cut-tos-priv/8b9f68a4a6942838e29afd2fef79fd61~tplv-dy-resize-origshort-autoq-75:330.jpeg?biz_tag=pcweb_cover&amp;from=327834062&amp;lk3s=138a59ce&amp;s=PackSourceEnum_SEARCH&amp;sc=cover&amp;se=false&amp;x-expires=2099278800&amp;x-signature=pTkwp0%2Brm1V4vaKM2AxPc0Ny8hU%3D" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">抖音</span><span class="score-badge s9">😂 9</span></div><div class="card-body"><div class="title">只要扛着一把梯子，就能出入各种公共场合 #梯子 #整活</div><div class="card-meta"><span class="author">阿谈</span><span class="stats"><span class="pub-age">2天前</span><span>👍 29.2万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">整活</span><span class="tag">公共场合</span><span class="tag">社会实验</span></div></div></div>
+<div class="card" data-href="https://www.douyin.com/video/7654919899986642353" data-score="9" data-cat="" data-platform="douyin" data-age="14" data-vid="douyin:7654919899986642353"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://p3-pc-sign.douyinpic.com/image-cut-tos-priv/13ad27499c7ee6d2df28b27853964dcb~tplv-dy-resize-origshort-autoq-75:330.jpeg?biz_tag=pcweb_cover&amp;from=327834062&amp;lk3s=138a59ce&amp;s=PackSourceEnum_SEARCH&amp;sc=cover&amp;se=false&amp;x-expires=2099300400&amp;x-signature=8Um5l1QBzOeOjCNmUVH3T64bX5U%3D" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">抖音</span><span class="score-badge s9">😂 9</span></div><div class="card-body"><div class="title">文化已被篡改 #二次元 #原创动画 #沙雕动画 #内容启发搜索#地球村动画</div><div class="card-meta"><span class="author">毛毛动画</span><span class="stats"><span class="pub-age">2周前</span><span>👍 13.7万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">沙雕动画</span><span class="tag">二次元</span><span class="tag">原创动画</span></div></div></div>
+<div class="card" data-href="https://www.douyin.com/video/7653283099232570687" data-score="9" data-cat="" data-platform="douyin" data-age="21" data-vid="douyin:7653283099232570687"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://p3-pc-sign.douyinpic.com/image-cut-tos-priv/9ad0a0dd13fac71f8126e0efaf11e21b~tplv-dy-resize-origshort-autoq-75:330.jpeg?biz_tag=pcweb_cover&amp;from=327834062&amp;lk3s=138a59ce&amp;s=PackSourceEnum_SEARCH&amp;sc=cover&amp;se=false&amp;x-expires=2099278800&amp;x-signature=z8BV6TMRlr6dVtJbMP20o02vLBQ%3D" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">抖音</span><span class="score-badge s9">😂 9</span></div><div class="card-body"><div class="title">😋“鲁鲁逊漂流记”😋 #三角洲行动 #沙雕Sanscul #乌鲁鲁 #核电站 #沙雕动画</div><div class="card-meta"><span class="author">沙雕Sanscul(三角洲行动)</span><span class="stats"><span class="pub-age">3周前</span><span>👍 3.4万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">三角洲行动</span><span class="tag">沙雕</span><span class="tag">搞笑</span></div></div></div>
+<div class="card" data-href="https://www.douyin.com/video/7661182705215753507" data-score="9" data-cat="" data-platform="douyin" data-age="2" data-vid="douyin:7661182705215753507"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://p3-pc-sign.douyinpic.com/image-cut-tos-priv/c063f600e585f72a33d79258c1c9eaf0~tplv-dy-resize-origshort-autoq-75:330.jpeg?biz_tag=pcweb_cover&amp;from=327834062&amp;lk3s=138a59ce&amp;s=PackSourceEnum_SEARCH&amp;sc=cover&amp;se=false&amp;x-expires=2099300400&amp;x-signature=vx4ZKxWL5xrakD42krBXtr1XNUg%3D" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">抖音</span><span class="score-badge s9">😂 9</span></div><div class="card-body"><div class="title">《花钱把自己关进了小黑屋》 #男人海洋 #改词翻唱 #搞笑配音 #万万没想到 #看一遍笑一遍</div><div class="card-meta"><span class="author">龙配</span><span class="stats"><span class="pub-age">2天前</span><span>👍 14.1万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">搞笑配音</span><span class="tag">翻唱</span><span class="tag">鬼畜</span></div></div></div>
+<div class="card" data-href="https://www.douyin.com/video/7661267220898647306" data-score="9" data-cat="" data-platform="douyin" data-age="1" data-vid="douyin:7661267220898647306"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://p3-pc-sign.douyinpic.com/image-cut-tos-priv/f921aa3f46a11cf0b413ea6b5881ed82~tplv-dy-resize-origshort-autoq-75:330.jpeg?biz_tag=pcweb_cover&amp;from=327834062&amp;lk3s=138a59ce&amp;s=PackSourceEnum_SEARCH&amp;sc=cover&amp;se=false&amp;x-expires=2099278800&amp;x-signature=Pe%2Fao9Z5eV4CQggnO3ygZfN3CNs%3D" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">抖音</span><span class="score-badge s9">😂 9</span></div><div class="card-body"><div class="title">葬爱姐妹，进宫速通选秀 #甄嬛传 #搞笑配音</div><div class="card-meta"><span class="author">艾米坊坊</span><span class="stats"><span class="pub-age">1天前</span><span>👍 18.6万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">甄嬛传</span><span class="tag">宫斗恶搞</span><span class="tag">网络热梗</span></div></div></div>
+<div class="card" data-href="https://www.douyin.com/video/7661478800039832569" data-score="9" data-cat="" data-platform="douyin" data-age="1" data-vid="douyin:7661478800039832569"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://p3-pc-sign.douyinpic.com/tos-cn-i-0813c000-ce/owf7IBSDWufFCAims9FfQApFgAFLJUAhp0DQAE~tplv-dy-resize-origshort-autoq-75:330.jpeg?biz_tag=pcweb_cover&amp;from=327834062&amp;lk3s=138a59ce&amp;s=PackSourceEnum_SEARCH&amp;sc=cover&amp;se=false&amp;x-expires=2099300400&amp;x-signature=GVsv%2BY3zJ2vzj7BsFaJEcQF05Ug%3D" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">抖音</span><span class="score-badge s9">😂 9</span></div><div class="card-body"><div class="title">我的兄弟为了去送外卖、好像把脑子给献祭了#搞笑配音 #脑洞大开 #发财梦 #神逻辑 #创作者伙伴计划</div><div class="card-meta"><span class="author">知心</span><span class="stats"><span class="pub-age">1天前</span><span>👍 9133</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">搞笑配音</span><span class="tag">脑洞大开</span><span class="tag">神逻辑</span></div></div></div>
+<div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BV1HDM76rEE8&amp;autoplay=0" data-score="9" data-cat="" data-platform="bilibili" data-age="4" data-vid="bilibili_funny:BV1HDM76rEE8"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://i1.hdslb.com/bfs/archive/faaea2ce9fc204088694836e77937065fe057945.jpg@672w_378h_1c_!web-search-common-cover" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">B站</span><span class="score-badge s9">😂 9</span></div><div class="card-body"><div class="title">【毕导】什么时候拿百大？今年高考能拿几分？800w粉丝读评论！</div><div class="card-meta"><span class="author">毕导</span><span class="stats"><span class="pub-age">4天前</span><span>👍 15.1万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">读评论</span><span class="tag">高考</span><span class="tag">百大UP</span></div></div></div>
+<div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BV16PNK6aEMf&amp;autoplay=0" data-score="9" data-cat="日常" data-platform="bilibili" data-age="1" data-vid="bilibili_funny:BV16PNK6aEMf"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="http://i2.hdslb.com/bfs/archive/56854ffadf17b24adb11105eb16b25582a85e4ec.jpg" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">B站</span><span class="score-badge s9">😂 9</span></div><div class="card-body"><div class="title">当我带着小精灵想办法让路人对coser说出真心话！</div><div class="card-meta"><span class="author">林带鱼w</span><span class="stats"><span class="pub-age">1天前</span><span>👍 2.8万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">整蛊</span><span class="tag">街访</span><span class="tag">cosplay</span></div></div></div>
+<div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BV191Nu6cEm9&amp;autoplay=0" data-score="9" data-cat="日常" data-platform="bilibili" data-age="1" data-vid="bilibili_funny:BV191Nu6cEm9"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="http://i1.hdslb.com/bfs/archive/f6aa3bee875fa8d72df73cf5ffa98c67e3b1b8b9.jpg" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">B站</span><span class="score-badge s9">😂 9</span></div><div class="card-body"><div class="title">我不知道你在笑什么？！</div><div class="card-meta"><span class="author">维易qiong1000粉烤蛇</span><span class="stats"><span class="pub-age">1天前</span><span>👍 6.0万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">爆笑名场面</span><span class="tag">笑点密集</span><span class="tag">迷惑行为</span></div></div></div>
+<div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BV196NT6dEf1&amp;autoplay=0" data-score="9" data-cat="搞笑" data-platform="bilibili" data-age="1" data-vid="bilibili_funny:BV196NT6dEf1"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="http://i2.hdslb.com/bfs/archive/e017c61944f0aa9a676b584005143e8d3ec2479e.jpg" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">B站</span><span class="score-badge s9">😂 9</span></div><div class="card-body"><div class="title">小时候带你打游戏的表哥</div><div class="card-meta"><span class="author">锤子game</span><span class="stats"><span class="pub-age">1天前</span><span>👍 12.9万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">游戏</span><span class="tag">怀旧</span><span class="tag">亲情</span></div></div></div>
+<div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BV1qLNg66ExY&amp;autoplay=0" data-score="9" data-cat="小剧场" data-platform="bilibili" data-age="1" data-vid="bilibili_funny:BV1qLNg66ExY"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="http://i0.hdslb.com/bfs/archive/61b641ce36e558094d76ef4ef2d5072cfd6509ca.jpg" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">B站</span><span class="score-badge s9">😂 9</span></div><div class="card-body"><div class="title">世界纪录</div><div class="card-meta"><span class="author">脱缰凯Kk</span><span class="stats"><span class="pub-age">1天前</span><span>👍 13.1万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">搞笑</span><span class="tag">挑战</span><span class="tag">生活</span></div></div></div>
+<div class="card" data-href="https://www.xiaohongshu.com/search_result/69c217be000000001a0295c7?xsec_token=ABKOdkTz61XSbQsyEYghauIqSNneUqO--odphOK5VwIlY=&amp;xsec_source=" data-score="8" data-cat="" data-platform="xiaohongshu" data-age="111" data-vid="xiaohongshu:69c217be000000001a0295c7"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://sns-webpic-qc.xhscdn.com/202607131901/d9a1f768e7d87435ad697834e617c5ff/1040g00831u37ilhb786g5pjh2pqgu40fua45sgg!nc_n_webp_prv_1" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">小红书</span><span class="score-badge s8">😂 8</span></div><div class="card-body"><div class="title">当工资是我十倍的老板，每天对我发泄情绪时</div><div class="card-meta"><span class="author"></span><span class="stats"><span class="pub-age">03/24</span><span>👍 1.4万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">职场吐槽</span><span class="tag">打工人共鸣</span><span class="tag">情绪价值</span></div></div></div>
+<div class="card" data-href="https://www.douyin.com/video/7661710799606097009" data-score="8" data-cat="" data-platform="douyin" data-age="0" data-vid="douyin:7661710799606097009"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://p9-pc-sign.douyinpic.com/image-cut-tos-priv/0f0781d8ce48dced7192d8357dd902ad~tplv-dy-resize-origshort-autoq-75:330.jpeg?biz_tag=pcweb_cover&amp;from=327834062&amp;lk3s=138a59ce&amp;s=PackSourceEnum_SEARCH&amp;sc=cover&amp;se=false&amp;x-expires=2099300400&amp;x-signature=eZ0%2BkZOFad%2BoSMBAnMX2XoH0ydU%3D" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">抖音</span><span class="score-badge s8">😂 8</span></div><div class="card-body"><div class="title">一定要看到最后！ #男人简单的快乐 #整活 #办公室游戏 #搞笑</div><div class="card-meta"><span class="author">河南小牛</span><span class="stats"><span class="pub-age">11小时前</span><span>👍 2.8万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">男人简单的快乐</span><span class="tag">整活</span><span class="tag">办公室游戏</span></div></div></div>
+<div class="card" data-href="https://www.douyin.com/video/7660406990937574665" data-score="8" data-cat="" data-platform="douyin" data-age="4" data-vid="douyin:7660406990937574665"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://p3-pc-sign.douyinpic.com/image-cut-tos-priv/822541cfa2fae0f6abb6a89c7a41817c~tplv-dy-resize-origshort-autoq-75:330.jpeg?biz_tag=pcweb_cover&amp;from=327834062&amp;lk3s=138a59ce&amp;s=PackSourceEnum_SEARCH&amp;sc=cover&amp;se=false&amp;x-expires=2099300400&amp;x-signature=yv2VAJNdIoukSs20gQkHEiD4zaM%3D" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">抖音</span><span class="score-badge s8">😂 8</span></div><div class="card-body"><div class="title">《符箓镇灵》蹲坑大合集，陆九阳和校花一起捉鬼，一次性看到爽 #原创动画 #沙雕动画 #一次性看完系列 #二次元 #穿越</div><div class="card-meta"><span class="author">在下陆九阳</span><span class="stats"><span class="pub-age">4天前</span><span>👍 2.8万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">原创动画</span><span class="tag">沙雕动画</span><span class="tag">一次性看完系列</span></div></div></div>
+<div class="card" data-href="https://www.douyin.com/video/7658218784909430031" data-score="8" data-cat="" data-platform="douyin" data-age="7" data-vid="douyin:7658218784909430031"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://p9-pc-sign.douyinpic.com/image-cut-tos-priv/c61ef88db163e1e8cfa861dfb17d8a46~tplv-dy-resize-origshort-autoq-75:330.jpeg?biz_tag=pcweb_cover&amp;from=327834062&amp;lk3s=138a59ce&amp;s=PackSourceEnum_SEARCH&amp;sc=cover&amp;se=false&amp;x-expires=2099300400&amp;x-signature=Drw3JyHbguRj5zGLjhv5q24SdAY%3D" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">抖音</span><span class="score-badge s8">😂 8</span></div><div class="card-body"><div class="title">种族骑士103 #沙雕动画 #唐达西 #搞笑</div><div class="card-meta"><span class="author">沙雕布鲁斯</span><span class="stats"><span class="pub-age">7天前</span><span>👍 1.7万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">沙雕动画</span><span class="tag">唐达西</span><span class="tag">搞笑</span></div></div></div>
+<div class="card" data-href="https://www.douyin.com/video/7661840343659326062" data-score="8" data-cat="" data-platform="douyin" data-age="0" data-vid="douyin:7661840343659326062"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://p3-pc-sign.douyinpic.com/image-cut-tos-priv/35d2139e93c68f8d7463b047aa9f8550~tplv-dy-resize-origshort-autoq-75:330.jpeg?biz_tag=pcweb_cover&amp;from=327834062&amp;lk3s=138a59ce&amp;s=PackSourceEnum_SEARCH&amp;sc=cover&amp;se=false&amp;x-expires=2099300400&amp;x-signature=rnc6hPflZYxoqtJ3p3knnPdhlHc%3D" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">抖音</span><span class="score-badge s8">😂 8</span></div><div class="card-body"><div class="title">狼：我已经进化成狗了！</div><div class="card-meta"><span class="author">大丙搞笑配音</span><span class="stats"><span class="pub-age">8小时前</span><span>👍 12.3万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">动物搞笑</span><span class="tag">配音创意</span><span class="tag">狼变狗</span></div></div></div>
+<div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BV1pzNK6BEDX&amp;autoplay=0" data-score="8" data-cat="绘画" data-platform="bilibili" data-age="1" data-vid="bilibili_funny:BV1pzNK6BEDX"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="http://i0.hdslb.com/bfs/archive/e690c4970e704759a13b4b6fe461feffe67c0a7c.jpg" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">B站</span><span class="score-badge s8">😂 8</span></div><div class="card-body"><div class="title">爱人呐。</div><div class="card-meta"><span class="author">L沐璟</span><span class="stats"><span class="pub-age">1天前</span><span>👍 7.2万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">情感</span><span class="tag">音乐</span><span class="tag">爱情</span></div></div></div>
+<div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BV1DzNx6MEtS&amp;autoplay=0" data-score="8" data-cat="乐评盘点" data-platform="bilibili" data-age="0" data-vid="bilibili_funny:BV1DzNx6MEtS"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="http://i2.hdslb.com/bfs/archive/f60c992e80dd74d0b526deef188231ecb10e4ef5.jpg" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">B站</span><span class="score-badge s8">😂 8</span></div><div class="card-body"><div class="title">循环歌单|【SINOS DE NATAL】|“【对视の小曲】”</div><div class="card-meta"><span class="author">蛋某人音乐</span><span class="stats"><span class="pub-age">11小时前</span><span>👍 7.2万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">音乐</span><span class="tag">循环歌单</span><span class="tag">浪漫</span></div></div></div>
+<div class="card" data-href="https://www.xiaohongshu.com/search_result/682c6f98000000000303edee?xsec_token=ABVlNyAsJzZvAtCobGvgTIEVlGG_FHVffgOxl5Zb3hPk4=&amp;xsec_source=" data-score="8" data-cat="" data-platform="xiaohongshu" data-age="417" data-vid="xiaohongshu:682c6f98000000000303edee"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://sns-webpic-qc.xhscdn.com/202607131901/80ab1f46e4136baf1352556fe6a47082/1040g00831hn2pk8l3s005ocic9341t89p99q2e8!nc_n_webp_prv_1" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">小红书</span><span class="score-badge s8">😂 8</span></div><div class="card-body"><div class="title">这迪迦来了都得躲！！</div><div class="card-meta"><span class="author"></span><span class="stats"><span class="pub-age">05/22</span><span>👍 4.0万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">特摄</span><span class="tag">搞笑</span><span class="tag">奥特曼</span></div></div></div>
+<div class="card" data-href="https://www.xiaohongshu.com/search_result/689425e9000000002500c4e3?xsec_token=ABbye108YhMDAE9zvbsgzjOW5QTf86l4u8uVaX7yrwo54=&amp;xsec_source=" data-score="8" data-cat="" data-platform="xiaohongshu" data-age="340" data-vid="xiaohongshu:689425e9000000002500c4e3"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://sns-webpic-qc.xhscdn.com/202607131901/b8d5e16b19e853e96c91d1d670b35395/1040g2sg31ksbp99mig70401fjkj4seuqppnho80!nc_n_webp_prv_1" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">小红书</span><span class="score-badge s8">😂 8</span></div><div class="card-body"><div class="title">上班上的好累🫩 这种蠢事都能干出来</div><div class="card-meta"><span class="author"></span><span class="stats"><span class="pub-age">08/07</span><span>👍 1.9万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">职场</span><span class="tag">打工人</span><span class="tag">失误</span></div></div></div>
+<div class="card" data-href="https://www.xiaohongshu.com/search_result/6a512f56000000000803cb40?xsec_token=ABvaIDzw5QW7BlnFw_5rMkeRWchxwMAFhORQ5ub5zuek0=&amp;xsec_source=" data-score="8" data-cat="" data-platform="xiaohongshu" data-age="2" data-vid="xiaohongshu:6a512f56000000000803cb40"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://sns-webpic-qc.xhscdn.com/202607131901/41c06643aa53af31670049fa135225d7/1040g2sg322eut5ml7u705n3jaeq45hl2p4pj368!nc_n_webp_prv_1" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">小红书</span><span class="score-badge s8">😂 8</span></div><div class="card-body"><div class="title">一天三四五顿饭的烦恼</div><div class="card-meta"><span class="author"></span><span class="stats"><span class="pub-age">2天前</span><span>👍 9048</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">吃货搞笑</span><span class="tag">饭量大</span><span class="tag">生活烦恼</span></div></div></div>
+<div class="card" data-href="https://www.xiaohongshu.com/search_result/66e055290000000025030167?xsec_token=ABP6oCePH0Tdz6csy1rxKnLZZNFcD51coJq9NIQd2WdvI=&amp;xsec_source=" data-score="8" data-cat="" data-platform="xiaohongshu" data-age="671" data-vid="xiaohongshu:66e055290000000025030167"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://sns-webpic-qc.xhscdn.com/202607131901/e38585d8ae2d7252a5f10bb403ca3c24/1040g008317iokfktju005nti7cgg9fn33drsqf8!nc_n_webp_prv_1" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">小红书</span><span class="score-badge s8">😂 8</span></div><div class="card-body"><div class="title">绕口令憋笑挑战，哈哈笑不活了</div><div class="card-meta"><span class="author"></span><span class="stats"><span class="pub-age">09/10</span><span>👍 3.7万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">绕口令挑战</span><span class="tag">憋笑挑战</span><span class="tag">搞笑</span></div></div></div>
+<div class="card" data-href="https://www.douyin.com/video/7661214640650603791" data-score="8" data-cat="" data-platform="douyin" data-age="1" data-vid="douyin:7661214640650603791"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://p3-pc-sign.douyinpic.com/image-cut-tos-priv/e6e2a6d7ef4397676ea4a4c15e780e77~tplv-dy-resize-origshort-autoq-75:330.jpeg?biz_tag=pcweb_cover&amp;from=327834062&amp;lk3s=138a59ce&amp;s=PackSourceEnum_SEARCH&amp;sc=cover&amp;se=false&amp;x-expires=2099278800&amp;x-signature=hA7zwUTWSVIpOtW8Cc4B8MFLabQ%3D" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">抖音</span><span class="score-badge s8">😂 8</span></div><div class="card-body"><div class="title">一群原始人用十几年的时间研发出了一门逆天的语言... #我的世界 #整活</div><div class="card-meta"><span class="author">江鸽北主任</span><span class="stats"><span class="pub-age">1天前</span><span>👍 12.6万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">我的世界</span><span class="tag">原始人</span><span class="tag">创造语言</span></div></div></div>
+<div class="card" data-href="https://www.douyin.com/video/7661292260927447104" data-score="8" data-cat="" data-platform="douyin" data-age="1" data-vid="douyin:7661292260927447104"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://p3-pc-sign.douyinpic.com/image-cut-tos-priv/63b8394b5347335830edf09106df8825~tplv-dy-resize-origshort-autoq-75:330.jpeg?biz_tag=pcweb_cover&amp;from=327834062&amp;lk3s=138a59ce&amp;s=PackSourceEnum_SEARCH&amp;sc=cover&amp;se=false&amp;x-expires=2099300400&amp;x-signature=5sFkxMwV46PtjohYbfa4A4fbKEo%3D" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">抖音</span><span class="score-badge s8">😂 8</span></div><div class="card-body"><div class="title">太诡异了！辉子唱《白雪公子》小白唱《辉飞烟灭》 不是这俩人连麦真的太有节目效果了，然后我觉得小白好可爱啊，他那里连麦失误那里我天天太太难崩了
+#辉子 #白景屹 #直播 #录屏 #整活</div><div class="card-meta"><span class="author">47戴结婚我也想上桌</span><span class="stats"><span class="pub-age">1天前</span><span>👍 8.5万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">直播整活</span><span class="tag">连麦搞笑</span><span class="tag">录屏</span></div></div></div>
+<div class="card" data-href="https://www.douyin.com/video/7660156440372583862" data-score="8" data-cat="" data-platform="douyin" data-age="4" data-vid="douyin:7660156440372583862"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://p3-pc-sign.douyinpic.com/image-cut-tos-priv/1363452c03902562bdccb365eeaf7ce2~tplv-dy-resize-origshort-autoq-75:330.jpeg?biz_tag=pcweb_cover&amp;from=327834062&amp;lk3s=138a59ce&amp;s=PackSourceEnum_SEARCH&amp;sc=cover&amp;se=false&amp;x-expires=2099278800&amp;x-signature=uyHcv%2Bsj1%2F17%2FQJ8vNyY5UdnGJY%3D" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">抖音</span><span class="score-badge s8">😂 8</span></div><div class="card-body"><div class="title">这个老板和中介到底值不值#搞笑动画 #二次元 #沙雕动画 #内容过于真实 #万万想不到</div><div class="card-meta"><span class="author">奇异动画</span><span class="stats"><span class="pub-age">4天前</span><span>👍 4.0万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">搞笑动画</span><span class="tag">二次元</span><span class="tag">沙雕动画</span></div></div></div>
+<div class="card" data-href="https://www.douyin.com/video/7661594713959122082" data-score="8" data-cat="" data-platform="douyin" data-age="1" data-vid="douyin:7661594713959122082"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://p3-pc-sign.douyinpic.com/image-cut-tos-priv/939fe64fb61bd85558e4111445eb139e~tplv-dy-resize-origshort-autoq-75:330.jpeg?biz_tag=pcweb_cover&amp;from=327834062&amp;lk3s=138a59ce&amp;s=PackSourceEnum_SEARCH&amp;sc=cover&amp;se=false&amp;x-expires=2099300400&amp;x-signature=f0od%2FOMkMS%2FLiruvGpIfFbiUyq0%3D" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">抖音</span><span class="score-badge s8">😂 8</span></div><div class="card-body"><div class="title">东三省的大鹅，差点就翻脸了 #万物可爱计划</div><div class="card-meta"><span class="author">唐小藏搞笑配音</span><span class="stats"><span class="pub-age">1天前</span><span>👍 7.8万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">东北话</span><span class="tag">动物搞笑</span><span class="tag">配音</span></div></div></div>
+<div class="card" data-href="https://www.douyin.com/video/7660836181060082602" data-score="8" data-cat="" data-platform="douyin" data-age="2" data-vid="douyin:7660836181060082602"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://p3-pc-sign.douyinpic.com/image-cut-tos-priv/9f03af4d5a6f90f37b3af3a5b980a8c3~tplv-dy-resize-origshort-autoq-75:330.jpeg?biz_tag=pcweb_cover&amp;from=327834062&amp;lk3s=138a59ce&amp;s=PackSourceEnum_SEARCH&amp;sc=cover&amp;se=false&amp;x-expires=2099278800&amp;x-signature=iXqdsPaRUVCyynUOjJKeN3sBLhs%3D" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">抖音</span><span class="score-badge s8">😂 8</span></div><div class="card-body"><div class="title">天气真热 竟然还不给开空调 素材来源：@老骆VR日常  #搞笑配音 #方言配音 #搞笑</div><div class="card-meta"><span class="author">平头哥</span><span class="stats"><span class="pub-age">2天前</span><span>👍 13.6万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">方言配音</span><span class="tag">夏日吐槽</span><span class="tag">生活搞笑</span></div></div></div>
+<div class="card" data-href="https://www.douyin.com/video/7660989636419783289" data-score="8" data-cat="" data-platform="douyin" data-age="2" data-vid="douyin:7660989636419783289"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://p3-pc-sign.douyinpic.com/image-cut-tos-priv/ac3cb2c81a2b9995ce31a6d94a905da0~tplv-dy-resize-origshort-autoq-75:330.jpeg?biz_tag=pcweb_cover&amp;from=327834062&amp;lk3s=138a59ce&amp;s=PackSourceEnum_SEARCH&amp;sc=cover&amp;se=false&amp;x-expires=2099300400&amp;x-signature=KxybGzaVq7y0O59JXQ%2BoP52OmQY%3D" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">抖音</span><span class="score-badge s8">😂 8</span></div><div class="card-body"><div class="title">是哪个我不说 #二创激励计划 #二创视频激励计划 #配音 #方言 #搞笑</div><div class="card-meta"><span class="author">是舒舒</span><span class="stats"><span class="pub-age">2天前</span><span>👍 3.2万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">二创视频</span><span class="tag">方言配音</span><span class="tag">搞笑配音</span></div></div></div>
+<div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BV1voJJ6eEfj&amp;autoplay=0" data-score="8" data-cat="" data-platform="bilibili" data-age="30" data-vid="bilibili_funny:BV1voJJ6eEfj"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://i1.hdslb.com/bfs/archive/bf3b6b7bd7136d361f069208d96fd1531a498775.jpg@672w_378h_1c_!web-search-common-cover" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">B站</span><span class="score-badge s8">😂 8</span></div><div class="card-body"><div class="title">难 绷</div><div class="card-meta"><span class="author">我叫小渔人</span><span class="stats"><span class="pub-age">4周前</span><span>👍 21.3万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">沙雕</span><span class="tag">抽象</span><span class="tag">爆笑</span></div></div></div>
+<div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BV1XCNT69E3m&amp;autoplay=0" data-score="8" data-cat="搞笑" data-platform="bilibili" data-age="1" data-vid="bilibili_funny:BV1XCNT69E3m"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="http://i1.hdslb.com/bfs/archive/47383fb21983d06cb8b6c500970c141e68a6f9af.jpg" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">B站</span><span class="score-badge s8">😂 8</span></div><div class="card-body"><div class="title">在bw要饭能要到什么？</div><div class="card-meta"><span class="author">野生鱼白</span><span class="stats"><span class="pub-age">1天前</span><span>👍 2.2万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">线下活动</span><span class="tag">BW漫展</span><span class="tag">搞笑挑战</span></div></div></div>
+<div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BV1JsTQ6YEhu&amp;autoplay=0" data-score="8" data-cat="日常" data-platform="bilibili" data-age="7" data-vid="bilibili_funny:BV1JsTQ6YEhu"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="http://i1.hdslb.com/bfs/archive/2153be7575acc155b9bd259b37dc806e1a4e9e32.jpg" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">B站</span><span class="score-badge s8">😂 8</span></div><div class="card-body"><div class="title">顶 级 智 斗</div><div class="card-meta"><span class="author">白澪今天六岁</span><span class="stats"><span class="pub-age">7天前</span><span>👍 2.4万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">智斗</span><span class="tag">博弈</span><span class="tag">剧情向</span></div></div></div>
+<div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BV1YQNp6eExm&amp;autoplay=0" data-score="8" data-cat="日常" data-platform="bilibili" data-age="2" data-vid="bilibili_funny:BV1YQNp6eExm"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="http://i1.hdslb.com/bfs/archive/047c39604afcf3293578d24ca96394782e932872.jpg" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">B站</span><span class="score-badge s8">😂 8</span></div><div class="card-body"><div class="title">留德华带你第一视角用人民币感受在超市退瓶子</div><div class="card-meta"><span class="author">Couches-裤裤_留德华版</span><span class="stats"><span class="pub-age">2天前</span><span>👍 10.0万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">德国生活</span><span class="tag">留学生日常</span><span class="tag">退瓶子</span></div></div></div>
+<div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BV1fnMH62EYd&amp;autoplay=0" data-score="8" data-cat="日常" data-platform="bilibili" data-age="3" data-vid="bilibili_funny:BV1fnMH62EYd"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="http://i1.hdslb.com/bfs/archive/de025c1a52eb211eedfb4d43717f009f7b5a41f7.jpg" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">B站</span><span class="score-badge s8">😂 8</span></div><div class="card-body"><div class="title">朋友的爸爸出轨了朋友的摩托车</div><div class="card-meta"><span class="author">水墨粤语配音</span><span class="stats"><span class="pub-age">3天前</span><span>👍 18.9万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">配音</span><span class="tag">沙雕</span><span class="tag">离谱</span></div></div></div>
+<div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BV18dNF6YExW&amp;autoplay=0" data-score="8" data-cat="日常" data-platform="bilibili" data-age="1" data-vid="bilibili_funny:BV18dNF6YExW"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="http://i1.hdslb.com/bfs/archive/9c0e380accb77a252c99b647b62f3c119b58b9f8.jpg" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">B站</span><span class="score-badge s8">😂 8</span></div><div class="card-body"><div class="title">你比泰森还牛比</div><div class="card-meta"><span class="author">孙逸轰</span><span class="stats"><span class="pub-age">1天前</span><span>👍 27.5万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">健身</span><span class="tag">搏击</span><span class="tag">搞笑</span></div></div></div>
+<div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BV1FmMi6xEgb&amp;autoplay=0" data-score="8" data-cat="搞笑" data-platform="bilibili" data-age="1" data-vid="bilibili_funny:BV1FmMi6xEgb"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="http://i2.hdslb.com/bfs/archive/9656eedddb7ca658922e8fdc4183fac16e33350c.jpg" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">B站</span><span class="score-badge s8">😂 8</span></div><div class="card-body"><div class="title">网络热传生物鉴定 第62期</div><div class="card-meta"><span class="author">无穷小亮的科普日常</span><span class="stats"><span class="pub-age">1天前</span><span>👍 18.9万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">科普</span><span class="tag">趣味生物</span><span class="tag">网络热梗</span></div></div></div>
+<div class="card" data-href="https://www.douyin.com/video/7661094154184894577" data-score="7" data-cat="" data-platform="douyin" data-age="2" data-vid="douyin:7661094154184894577"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://p9-pc-sign.douyinpic.com/image-cut-tos-priv/f987eafebfd4155b500b854f0e499694~tplv-dy-resize-origshort-autoq-75:330.jpeg?biz_tag=pcweb_cover&amp;from=327834062&amp;lk3s=138a59ce&amp;s=PackSourceEnum_SEARCH&amp;sc=cover&amp;se=false&amp;x-expires=2099300400&amp;x-signature=uRGW9TKfAZRxLuxyNoovuf7LB9U%3D" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">抖音</span><span class="score-badge s7">😂 7</span></div><div class="card-body"><div class="title">被宗门驱逐后，我在山下开了一家饭店。并且好心收留了瘸腿的乞丐…#沙雕动画 #动漫推荐 #二次元  #动漫解说</div><div class="card-meta"><span class="author">离。</span><span class="stats"><span class="pub-age">2天前</span><span>👍 1.5万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">沙雕动画</span><span class="tag">动漫推荐</span><span class="tag">二次元</span></div></div></div>
+<div class="card" data-href="https://www.douyin.com/video/7660408233747680564" data-score="7" data-cat="" data-platform="douyin" data-age="4" data-vid="douyin:7660408233747680564"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://p3-pc-sign.douyinpic.com/image-cut-tos-priv/e0b0ce1a8aa9a33c5d55d0e528942a28~tplv-dy-resize-origshort-autoq-75:330.jpeg?biz_tag=pcweb_cover&amp;from=327834062&amp;lk3s=138a59ce&amp;s=PackSourceEnum_SEARCH&amp;sc=cover&amp;se=false&amp;x-expires=2099300400&amp;x-signature=v04cZjB1ek1WlS3KokinxPK18Xc%3D" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">抖音</span><span class="score-badge s7">😂 7</span></div><div class="card-body"><div class="title">满级钓场 大合集#原创动画 #二次元 #沙雕动画 #钓鱼佬 #钓鱼佬永不空军</div><div class="card-meta"><span class="author">李纯钢</span><span class="stats"><span class="pub-age">4天前</span><span>👍 1.3万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">原创动画</span><span class="tag">二次元</span><span class="tag">沙雕动画</span></div></div></div>
+<div class="card" data-href="https://www.douyin.com/video/7658613821645659482" data-score="7" data-cat="" data-platform="douyin" data-age="7" data-vid="douyin:7658613821645659482"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://p3-pc-sign.douyinpic.com/image-cut-tos-priv/85758f726467437fcb9696e266d18530~tplv-dy-resize-origshort-autoq-75:330.jpeg?biz_tag=pcweb_cover&amp;from=327834062&amp;lk3s=138a59ce&amp;s=PackSourceEnum_SEARCH&amp;sc=cover&amp;se=false&amp;x-expires=2099300400&amp;x-signature=ztFlk7wc2NltTW27%2FvENDpoC4Gw%3D" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">抖音</span><span class="score-badge s7">😂 7</span></div><div class="card-body"><div class="title">我饭都吃不起了，你让我吃肉糜。#全网热门话题讨论 #熊猫头动画 #沙雕动画 #求推荐近期热门话题</div><div class="card-meta"><span class="author">熊猫搬山</span><span class="stats"><span class="pub-age">7天前</span><span>👍 9958</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">全网热门话题讨论</span><span class="tag">熊猫头动画</span><span class="tag">沙雕动画</span></div></div></div>
+<div class="card" data-href="https://www.douyin.com/video/7661210164864068334" data-score="7" data-cat="" data-platform="douyin" data-age="2" data-vid="douyin:7661210164864068334"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://p3-pc-sign.douyinpic.com/image-cut-tos-priv/69978a93cbf94320d58d205bc1ee22a1~tplv-dy-resize-origshort-autoq-75:330.jpeg?biz_tag=pcweb_cover&amp;from=327834062&amp;lk3s=138a59ce&amp;s=PackSourceEnum_SEARCH&amp;sc=cover&amp;se=false&amp;x-expires=2099300400&amp;x-signature=CbquHAAUPfz7DVTj0M8zwigwZpI%3D" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">抖音</span><span class="score-badge s7">😂 7</span></div><div class="card-body"><div class="title">俩狗下乡见世面 火鸡追的团团转 #动漫 #看一遍笑一遍 #东北话搞笑配音</div><div class="card-meta"><span class="author">乐宇（东北话搞笑配音）</span><span class="stats"><span class="pub-age">2天前</span><span>👍 1.5万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">东北话搞笑</span><span class="tag">动物搞笑</span><span class="tag">动漫配音</span></div></div></div>
+<div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BV1UBNg6RE5t&amp;autoplay=0" data-score="7" data-cat="日常" data-platform="bilibili" data-age="1" data-vid="bilibili_funny:BV1UBNg6RE5t"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="http://i2.hdslb.com/bfs/archive/48508de8f21040fbd06e5a91e701789ceefde34e.jpg" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">B站</span><span class="score-badge s7">😂 7</span></div><div class="card-body"><div class="title">当我cos反派在漫展捉异色精灵？</div><div class="card-meta"><span class="author">张恩恩NNN</span><span class="stats"><span class="pub-age">1天前</span><span>👍 3.8万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">漫展搞笑</span><span class="tag">Cosplay</span><span class="tag">游戏梗</span></div></div></div>
+<div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BV1MfN36cEnD&amp;autoplay=0" data-score="7" data-cat="明星综合" data-platform="bilibili" data-age="0" data-vid="bilibili_funny:BV1MfN36cEnD"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="http://i0.hdslb.com/bfs/archive/c670ecc8122aa0b333af75fd4717ee9a0ccac07b.jpg" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">B站</span><span class="score-badge s7">😂 7</span></div><div class="card-body"><div class="title">震惊！内娱竟然出来蛇塑女爱豆！</div><div class="card-meta"><span class="author">刘婷秀_Amorfati</span><span class="stats"><span class="pub-age">22小时前</span><span>👍 9245</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">娱乐</span><span class="tag">明星</span><span class="tag">整活</span></div></div></div>
+<div class="card" data-href="https://www.xiaohongshu.com/search_result/6766884600000000130180e7?xsec_token=AB-SLCM5vNRFaONELHKKeC_Xclv9s4do8YZb8kVjm3N3A=&amp;xsec_source=" data-score="7" data-cat="" data-platform="xiaohongshu" data-age="569" data-vid="xiaohongshu:6766884600000000130180e7"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://sns-webpic-qc.xhscdn.com/202607131901/868746cb21ee4ee4bd5b9e013fb09f5f/1040g2sg31blqc4jj087048p4vje1oq5nn53ddfg!nc_n_webp_prv_1" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">小红书</span><span class="score-badge s7">😂 7</span></div><div class="card-body"><div class="title">你们过年都去哪？</div><div class="card-meta"><span class="author"></span><span class="stats"><span class="pub-age">12/21</span><span>👍 5679</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">过年</span><span class="tag">生活</span><span class="tag">互动</span></div></div></div>
+<div class="card" data-href="https://www.xiaohongshu.com/search_result/68b574ce000000001d02165a?xsec_token=ABEdz-j7UYmYpnwxEs0X_2K8IdhtlEjr3J5Ukckeca0E0=&amp;xsec_source=" data-score="7" data-cat="" data-platform="xiaohongshu" data-age="315" data-vid="xiaohongshu:68b574ce000000001d02165a"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://sns-webpic-qc.xhscdn.com/202607131355/2833820f857449799cf730d7983a3ba8/1040g2sg31lss96h558s04blip0m0601jv48domg!nc_n_webp_prv_1" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">小红书</span><span class="score-badge s7">😂 7</span></div><div class="card-body"><div class="title">被我骗到了吧小傻瓜</div><div class="card-meta"><span class="author"></span><span class="stats"><span class="pub-age">09/01</span><span>👍 3.6万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">恶作剧</span><span class="tag">搞笑互动</span><span class="tag">可爱欺骗</span></div></div></div>
+<div class="card" data-href="https://www.xiaohongshu.com/search_result/6a508560000000000f01d060?xsec_token=ABZQ-3-tVJZtneK0D7bWyzbPVa7H0pq3_hh7jkwNnZDb0=&amp;xsec_source=" data-score="7" data-cat="" data-platform="xiaohongshu" data-age="2" data-vid="xiaohongshu:6a508560000000000f01d060"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://sns-webpic-qc.xhscdn.com/202607131901/36d263fc9ea648297e09c6003e10b770/spectrum/1040g0k0322eafsft6u005nocck3g823dtm1s558!nc_n_webp_prv_1" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">小红书</span><span class="score-badge s7">😂 7</span></div><div class="card-body"><div class="title">帅哥危险，中专帅哥更危险⚠️</div><div class="card-meta"><span class="author"></span><span class="stats"><span class="pub-age">2天前</span><span>👍 1.4万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">帅哥搞笑</span><span class="tag">反差萌</span><span class="tag">颜值搞笑</span></div></div></div>
+<div class="card" data-href="https://www.xiaohongshu.com/search_result/689301530000000025013efe?xsec_token=ABfOc2LhsGr3yl90HyxBaUlEErf3Tjh-k4XnJiqqxdsuY=&amp;xsec_source=" data-score="7" data-cat="" data-platform="xiaohongshu" data-age="341" data-vid="xiaohongshu:689301530000000025013efe"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://sns-webpic-qc.xhscdn.com/202607131355/406921cda5799fdbc594e21bc3797aea/110/0/01e89300c2b4bdfc001000000001987e3b0407_0.jpg!nc_n_webp_prv_1" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">小红书</span><span class="score-badge s7">😂 7</span></div><div class="card-body"><div class="title">潘展乐、汪顺演“我和我朋友对视”</div><div class="card-meta"><span class="author"></span><span class="stats"><span class="pub-age">08/06</span><span>👍 13.0万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">运动员</span><span class="tag">对视挑战</span><span class="tag">搞笑</span></div></div></div>
+<div class="card" data-href="https://www.douyin.com/video/7661210832316314597" data-score="7" data-cat="" data-platform="douyin" data-age="2" data-vid="douyin:7661210832316314597"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://p3-pc-sign.douyinpic.com/image-cut-tos-priv/b867318cabc8451eb288f0e41e20de12~tplv-dy-resize-origshort-autoq-75:330.jpeg?biz_tag=pcweb_cover&amp;from=327834062&amp;lk3s=138a59ce&amp;s=PackSourceEnum_SEARCH&amp;sc=cover&amp;se=false&amp;x-expires=2099300400&amp;x-signature=b3r2uZSQGKgkUlxKaPfgVAsDF6c%3D" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">抖音</span><span class="score-badge s7">😂 7</span></div><div class="card-body"><div class="title">（重制版）压了500年后的世界这么疯狂吗？！！ #ai二创 #ai整活 #西游记 #孙悟空</div><div class="card-meta"><span class="author">错错不犯错</span><span class="stats"><span class="pub-age">2天前</span><span>👍 3.2万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">AI二创</span><span class="tag">西游记</span><span class="tag">孙悟空</span></div></div></div>
+<div class="card" data-href="https://www.douyin.com/video/7661266221702951794" data-score="7" data-cat="" data-platform="douyin" data-age="1" data-vid="douyin:7661266221702951794"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://p3-pc-sign.douyinpic.com/image-cut-tos-priv/22123dde4585d1eb0e135c9692102483~tplv-dy-resize-origshort-autoq-75:330.jpeg?biz_tag=pcweb_cover&amp;from=327834062&amp;lk3s=138a59ce&amp;s=PackSourceEnum_SEARCH&amp;sc=cover&amp;se=false&amp;x-expires=2099300400&amp;x-signature=J88QuZM8PzQYQtAXz6D6wNo%2B974%3D" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">抖音</span><span class="score-badge s7">😂 7</span></div><div class="card-body"><div class="title">哈哈哈哈哈申浩男我跟你笑的一样大声，笑力竭了#申浩男 #沉思 #陈添祥 #综艺整活名场面 #短剧X家族 @申浩男 @申浩男工作室 @短剧X家族</div><div class="card-meta"><span class="author">N知我意🐽</span><span class="stats"><span class="pub-age">1天前</span><span>👍 7172</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">综艺整活</span><span class="tag">名场面</span><span class="tag">爆笑</span></div></div></div>
+<div class="card" data-href="https://www.douyin.com/video/7660895299702934799" data-score="7" data-cat="" data-platform="douyin" data-age="2" data-vid="douyin:7660895299702934799"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://p3-pc-sign.douyinpic.com/image-cut-tos-priv/3806718b194e179a4e8d3b353141b42d~tplv-dy-resize-origshort-autoq-75:330.jpeg?biz_tag=pcweb_cover&amp;from=327834062&amp;lk3s=138a59ce&amp;s=PackSourceEnum_SEARCH&amp;sc=cover&amp;se=false&amp;x-expires=2099300400&amp;x-signature=ehWiUUmQN7UvvGJUIb0byIzoDnM%3D" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">抖音</span><span class="score-badge s7">😂 7</span></div><div class="card-body"><div class="title">领证了兄弟们 #兔娘 @兔娘  #bw #抽象 #整活</div><div class="card-meta"><span class="author">萧同学</span><span class="stats"><span class="pub-age">2天前</span><span>👍 3.0万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">抽象整活</span><span class="tag">领证</span><span class="tag">搞笑</span></div></div></div>
+<div class="card" data-href="https://www.douyin.com/video/7661108886039973158" data-score="7" data-cat="" data-platform="douyin" data-age="2" data-vid="douyin:7661108886039973158"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://p3-pc-sign.douyinpic.com/image-cut-tos-priv/1331fe54ed501fa4b428684e319df48d~tplv-dy-resize-origshort-autoq-75:330.jpeg?biz_tag=pcweb_cover&amp;from=327834062&amp;lk3s=138a59ce&amp;s=PackSourceEnum_SEARCH&amp;sc=cover&amp;se=false&amp;x-expires=2099300400&amp;x-signature=1pa9bMb6umKUqNtWHNX%2BG8N72NQ%3D" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">抖音</span><span class="score-badge s7">😂 7</span></div><div class="card-body"><div class="title">结婚证，还是1000万？好难！ #AI动画#整活</div><div class="card-meta"><span class="author">勾魂公狒狒</span><span class="stats"><span class="pub-age">2天前</span><span>👍 4.6万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">AI动画</span><span class="tag">整活</span><span class="tag">搞笑</span></div></div></div>
+<div class="card" data-href="https://www.douyin.com/video/7660003308195639744" data-score="7" data-cat="" data-platform="douyin" data-age="5" data-vid="douyin:7660003308195639744"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://p3-pc-sign.douyinpic.com/image-cut-tos-priv/59a73d2d71bad2851f1f2dd10c83a608~tplv-dy-resize-origshort-autoq-75:330.jpeg?biz_tag=pcweb_cover&amp;from=327834062&amp;lk3s=138a59ce&amp;s=PackSourceEnum_SEARCH&amp;sc=cover&amp;se=false&amp;x-expires=2099278800&amp;x-signature=Ab%2Fr0mchVREdYN9zl6grqjDKdBM%3D" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">抖音</span><span class="score-badge s7">😂 7</span></div><div class="card-body"><div class="title">它会拐弯！原声@CHEN先生（江南小岳岳） #江浙沪 #沙雕动画</div><div class="card-meta"><span class="author">浩琪动画</span><span class="stats"><span class="pub-age">5天前</span><span>👍 3.6万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">沙雕动画</span><span class="tag">物理搞笑</span><span class="tag">江浙沪梗</span></div></div></div>
+<div class="card" data-href="https://www.douyin.com/video/7660106402194623770" data-score="7" data-cat="" data-platform="douyin" data-age="4" data-vid="douyin:7660106402194623770"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://p3-pc-sign.douyinpic.com/image-cut-tos-priv/ad2f769aa14d31a236bab0af8233e7a2~tplv-dy-resize-origshort-autoq-75:330.jpeg?biz_tag=pcweb_cover&amp;from=327834062&amp;lk3s=138a59ce&amp;s=PackSourceEnum_SEARCH&amp;sc=cover&amp;se=false&amp;x-expires=2099278800&amp;x-signature=%2BZfqSKBoOhQ4Ny5bjDGNvPuKF%2BI%3D" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">抖音</span><span class="score-badge s7">😂 7</span></div><div class="card-body"><div class="title">将恶人赶走关押，爷爷奶奶出事了 #原创动画 #二次元 #沙雕动画</div><div class="card-meta"><span class="author">星禾动画</span><span class="stats"><span class="pub-age">4天前</span><span>👍 3.3万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">原创动画</span><span class="tag">二次元</span><span class="tag">沙雕动画</span></div></div></div>
+<div class="card" data-href="https://www.douyin.com/video/7660847962712542518" data-score="7" data-cat="" data-platform="douyin" data-age="2" data-vid="douyin:7660847962712542518"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://p3-pc-sign.douyinpic.com/image-cut-tos-priv/602a7518f9c474da3a0b117e19d969c1~tplv-dy-resize-origshort-autoq-75:330.jpeg?biz_tag=pcweb_cover&amp;from=327834062&amp;lk3s=138a59ce&amp;s=PackSourceEnum_SEARCH&amp;sc=cover&amp;se=false&amp;x-expires=2099278800&amp;x-signature=B3hrEy0PIKVX9RL8h%2BoIPalueLo%3D" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">抖音</span><span class="score-badge s7">😂 7</span></div><div class="card-body"><div class="title">伤心的爷爷奶奶，被陷害的二叔 #原创动画 #二次元 #沙雕动画</div><div class="card-meta"><span class="author">星禾动画</span><span class="stats"><span class="pub-age">2天前</span><span>👍 2.9万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">原创动画</span><span class="tag">二次元</span><span class="tag">沙雕动画</span></div></div></div>
+<div class="card" data-href="https://www.douyin.com/video/7660827752643235087" data-score="7" data-cat="" data-platform="douyin" data-age="2" data-vid="douyin:7660827752643235087"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://p3-pc-sign.douyinpic.com/image-cut-tos-priv/690ff914228916a570ce7410e02acc0f~tplv-dy-resize-origshort-autoq-75:330.jpeg?biz_tag=pcweb_cover&amp;from=327834062&amp;lk3s=138a59ce&amp;s=PackSourceEnum_SEARCH&amp;sc=cover&amp;se=false&amp;x-expires=2099300400&amp;x-signature=Ini1LN6LOuv94koCzwyrV17LfY0%3D" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">抖音</span><span class="score-badge s7">😂 7</span></div><div class="card-body"><div class="title">喊你一天不要得意忘形，勒哈安逸了撒！ #神客配音 #方言配音 #搞笑配音 #二次元 #动漫</div><div class="card-meta"><span class="author">神客</span><span class="stats"><span class="pub-age">2天前</span><span>👍 6.6万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">方言</span><span class="tag">搞笑配音</span><span class="tag">动漫</span></div></div></div>
+<div class="card" data-href="https://www.douyin.com/video/7661571812267262438" data-score="7" data-cat="" data-platform="douyin" data-age="1" data-vid="douyin:7661571812267262438"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="https://p3-pc-sign.douyinpic.com/image-cut-tos-priv/6b1b5426189983323b3965c95beb9b34~tplv-dy-resize-origshort-autoq-75:330.jpeg?biz_tag=pcweb_cover&amp;from=327834062&amp;lk3s=138a59ce&amp;s=PackSourceEnum_SEARCH&amp;sc=cover&amp;se=false&amp;x-expires=2099300400&amp;x-signature=EXg8fGSOld88dHCuAuCfVtYdquE%3D" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">抖音</span><span class="score-badge s7">😂 7</span></div><div class="card-body"><div class="title">兔老大一身本领 终于派上用场 #动漫 #看一遍笑一遍 #东北话搞笑配音</div><div class="card-meta"><span class="author">乐宇（东北话搞笑配音）</span><span class="stats"><span class="pub-age">1天前</span><span>👍 9297</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">动漫</span><span class="tag">东北话</span><span class="tag">搞笑配音</span></div></div></div>
+<div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BV1kxNn6CEhU&amp;autoplay=0" data-score="7" data-cat="同人·手书" data-platform="bilibili" data-age="3" data-vid="bilibili_funny:BV1kxNn6CEhU"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="http://i0.hdslb.com/bfs/archive/15f32a4f20c324ab33c7394611db89b3efc941f0.jpg" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">B站</span><span class="score-badge s7">😂 7</span></div><div class="card-body"><div class="title">【oc动画】原创剧情｜箱庭之家Miniature Brood</div><div class="card-meta"><span class="author">玉玖爱喝酒</span><span class="stats"><span class="pub-age">3天前</span><span>👍 9.5万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">原创动画</span><span class="tag">箱庭世界</span><span class="tag">治愈系</span></div></div></div>
+<div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BV1CANg6UEaN&amp;autoplay=0" data-score="7" data-cat="美食侦探" data-platform="bilibili" data-age="1" data-vid="bilibili_funny:BV1CANg6UEaN"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="http://i0.hdslb.com/bfs/archive/a2b4e811a864a07dcb532e6c6b0d35b76ff43840.jpg" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">B站</span><span class="score-badge s7">😂 7</span></div><div class="card-body"><div class="title">带从没吃过海鲜的爸妈来大连，直接被海鲜“包围”！给爸爸妈妈整不会了</div><div class="card-meta"><span class="author">老王在中国</span><span class="stats"><span class="pub-age">1天前</span><span>👍 2.9万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">海鲜</span><span class="tag">爸妈反应</span><span class="tag">大连旅游</span></div></div></div>
+<div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BV1GKNu6ZE2H&amp;autoplay=0" data-score="7" data-cat="搞笑" data-platform="bilibili" data-age="0" data-vid="bilibili_funny:BV1GKNu6ZE2H"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="http://i1.hdslb.com/bfs/archive/26d5ce3afa3d15b29d325ab7a173179f5ed4ecc8.jpg" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">B站</span><span class="score-badge s7">😂 7</span></div><div class="card-body"><div class="title">《可怜天下父母心》</div><div class="card-meta"><span class="author">嘞是唐孃孃</span><span class="stats"><span class="pub-age">23小时前</span><span>👍 7.9万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">亲情</span><span class="tag">父母心</span><span class="tag">感动</span></div></div></div>
+<div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BV1CKNG6sEkE&amp;autoplay=0" data-score="7" data-cat="MAD·AMV" data-platform="bilibili" data-age="0" data-vid="bilibili_funny:BV1CKNG6sEkE"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="http://i2.hdslb.com/bfs/archive/da428b2373199df036e981786229274e49ffb46c.jpg" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">B站</span><span class="score-badge s7">😂 7</span></div><div class="card-body"><div class="title">【欺天道君】第2.5集 悬棺</div><div class="card-meta"><span class="author">隙游尘</span><span class="stats"><span class="pub-age">22小时前</span><span>👍 3.6万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">国产动画</span><span class="tag">悬疑剧情</span><span class="tag">修仙题材</span></div></div></div>
+<div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BV1sfNT6yEdE&amp;autoplay=0" data-score="7" data-cat="小剧场" data-platform="bilibili" data-age="1" data-vid="bilibili_funny:BV1sfNT6yEdE"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="http://i0.hdslb.com/bfs/archive/521e4556211929967e4877376184aa7dfb4e6549.jpg" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">B站</span><span class="score-badge s7">😂 7</span></div><div class="card-body"><div class="title">《咕 嘎 五 千 年》 终极典藏版</div><div class="card-meta"><span class="author">皮蛋瘦肉粥煎鸡蛋</span><span class="stats"><span class="pub-age">1天前</span><span>👍 6.2万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">搞笑历史</span><span class="tag">趣味科普</span><span class="tag">创意动画</span></div></div></div>
+<div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BV1C6NM61EU6&amp;autoplay=0" data-score="7" data-cat="手工" data-platform="bilibili" data-age="1" data-vid="bilibili_funny:BV1C6NM61EU6"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="http://i2.hdslb.com/bfs/archive/dda0c883cd42c3a4405d49bbc4fd41de9f9c3ace.jpg" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">B站</span><span class="score-badge s7">😂 7</span></div><div class="card-body"><div class="title">用玻璃手搓了雷电将军…</div><div class="card-meta"><span class="author">光与GLASSART-陈墨</span><span class="stats"><span class="pub-age">1天前</span><span>👍 15.1万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">手工</span><span class="tag">原神</span><span class="tag">雷电将军</span></div></div></div>
+<div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BV1WHNu6mEia&amp;autoplay=0" data-score="7" data-cat="搞笑" data-platform="bilibili" data-age="0" data-vid="bilibili_funny:BV1WHNu6mEia"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="http://i0.hdslb.com/bfs/archive/b396b2e596c9978206bca6cdf169208dc23f37a3.jpg" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">B站</span><span class="score-badge s7">😂 7</span></div><div class="card-body"><div class="title">社交恐惧怎么办？</div><div class="card-meta"><span class="author">是曹欣睿</span><span class="stats"><span class="pub-age">23小时前</span><span>👍 8.7万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">社交恐惧</span><span class="tag">心理</span><span class="tag">搞笑</span></div></div></div>
+<div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BV1f2N76aE8F&amp;autoplay=0" data-score="7" data-cat="手工" data-platform="bilibili" data-age="3" data-vid="bilibili_funny:BV1f2N76aE8F"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="http://i1.hdslb.com/bfs/archive/84d27875eca3957d861a1690a3642ff35f3dd3fb.jpg" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">B站</span><span class="score-badge s7">😂 7</span></div><div class="card-body"><div class="title">墨山道申请出战——手搓30w顶奢画舫</div><div class="card-meta"><span class="author">天亮手工</span><span class="stats"><span class="pub-age">3天前</span><span>👍 12.1万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">手工</span><span class="tag">创意</span><span class="tag">模型</span></div></div></div>
+<div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BV13qNA6VEiv&amp;autoplay=0" data-score="7" data-cat="搞笑" data-platform="bilibili" data-age="1" data-vid="bilibili_funny:BV13qNA6VEiv"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="http://i0.hdslb.com/bfs/archive/9ec9d64c0619f685c3701ce7f3cdbb371a647480.jpg" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">B站</span><span class="score-badge s7">😂 7</span></div><div class="card-body"><div class="title">《我推的孩子》</div><div class="card-meta"><span class="author">伤心欲茄222</span><span class="stats"><span class="pub-age">1天前</span><span>👍 16.0万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">我推的孩子</span><span class="tag">动漫</span><span class="tag">二创</span></div></div></div>
+<div class="card" data-embed="https://player.bilibili.com/player.html?bvid=BV1jtNx6mExF&amp;autoplay=0" data-score="7" data-cat="日常" data-platform="bilibili" data-age="2" data-vid="bilibili_funny:BV1jtNx6mExF"><div class="thumb"><img loading="lazy" referrerpolicy="no-referrer" src="http://i0.hdslb.com/bfs/archive/5c631c7f698f878415742d99245d00c3df403df8.jpg" alt="" onerror="this.closest('.thumb').classList.add('no-img')"><span class="platform-icon">B站</span><span class="score-badge s7">😂 7</span></div><div class="card-body"><div class="title">为了营造出夏日的氛围🍃，我玩了两年半的“赛博拼豆”...</div><div class="card-meta"><span class="author">keky-ven</span><span class="stats"><span class="pub-age">2天前</span><span>👍 42.8万</span></span><button class="like-btn" aria-label="喜欢">🤍</button></div><div class="tags"><span class="tag">手工DIY</span><span class="tag">赛博朋克</span><span class="tag">夏日氛围</span></div></div></div>
+  <div class="empty" id="empty">
+    <div class="icon">🔍</div>
+    <p>没有符合条件的视频</p>
+  </div>
+</div>
+<div class="play-overlay hidden" id="overlay">
+  <div class="player-wrap">
+    <div class="player-aspect">
+      <iframe id="player" allowfullscreen></iframe>
+    </div>
+    <div class="player-bar">
+      <span class="player-title" id="playerTitle"></span>
+      <button class="close-btn" id="closeBtn" aria-label="关闭">✕</button>
+    </div>
+  </div>
+</div>
+<script>
+const overlay = document.getElementById('overlay');
+const player = document.getElementById('player');
+const playerTitle = document.getElementById('playerTitle');
+
+function closePlayer() {
+  overlay.classList.add('hidden');
+  player.src = '';
+  playerTitle.textContent = '';
+}
+
+document.getElementById('closeBtn').onclick = closePlayer;
+overlay.onclick = e => { if (e.target === overlay) closePlayer(); };
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closePlayer(); });
+
+// ── 喜欢 + 已看（localStorage 持久化，跨页面刷新保留）──
+const LIKED_KEY   = 'fv_liked';
+const WATCHED_KEY = 'fv_watched';
+
+function getSet(key) {
+  try { return new Set(JSON.parse(localStorage.getItem(key) || '[]')); }
+  catch (_) { return new Set(); }
+}
+function saveSet(key, set) {
+  localStorage.setItem(key, JSON.stringify([...set]));
+}
+
+let likedSet   = getSet(LIKED_KEY);
+let watchedSet = getSet(WATCHED_KEY);
+
+// 页面加载时把已有状态渲染到卡片上（主 grid + 精华条）
+document.querySelectorAll('.card[data-vid], .feat-card[data-vid]').forEach(card => {
+  const vid = card.dataset.vid;
+  if (!vid) return;
+  if (likedSet.has(vid))   { card.classList.add('liked'); }
+  if (watchedSet.has(vid)) { card.classList.add('watched'); }
+});
+// .card 的爱心按钮文字单独同步（.feat-card 无 like-btn，用 box-shadow 表示已喜欢）
+document.querySelectorAll('.card[data-vid] .like-btn').forEach(btn => {
+  const vid = btn.closest('.card')?.dataset.vid;
+  if (vid && likedSet.has(vid)) btn.textContent = '❤️';
+});
+
+// 爱心按钮点击（stopPropagation 防止触发卡片播放/跳转）
+document.querySelectorAll('.like-btn').forEach(btn => {
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    const card = btn.closest('.card');
+    const vid  = card?.dataset.vid;
+    if (!vid) return;
+    if (likedSet.has(vid)) {
+      likedSet.delete(vid);
+      card.classList.remove('liked');
+      btn.textContent = '🤍';
+    } else {
+      likedSet.add(vid);
+      card.classList.add('liked');
+      btn.textContent = '❤️';
+    }
+    saveSet(LIKED_KEY, likedSet);
+  });
+});
+
+// 卡片点击：有 embed → iframe 内嵌；无 embed → 新标签页外跳；同时标记已看
+document.querySelectorAll('.card').forEach(card => {
+  card.onclick = () => {
+    const embed = card.dataset.embed;
+    if (embed) {
+      player.src = embed;
+      playerTitle.textContent = card.querySelector('.title')?.textContent || '';
+      overlay.classList.remove('hidden');
+    } else {
+      const href = card.dataset.href;
+      if (href) window.open(href, '_blank');
+    }
+    // 标记已看（localStorage 持久化）
+    const vid = card.dataset.vid;
+    if (vid && !watchedSet.has(vid)) {
+      watchedSet.add(vid);
+      card.classList.add('watched');
+      saveSet(WATCHED_KEY, watchedSet);
+    }
+  };
+});
+
+// 精华条点击：逻辑与主卡片相同，同时标记已看
+document.querySelectorAll('.feat-card').forEach(card => {
+  card.onclick = () => {
+    const embed = card.dataset.embed;
+    if (embed) {
+      player.src = embed;
+      playerTitle.textContent = card.querySelector('.feat-title')?.textContent || '';
+      overlay.classList.remove('hidden');
+    } else {
+      const href = card.dataset.href;
+      if (href) window.open(href, '_blank');
+    }
+    const vid = card.dataset.vid;
+    if (vid && !watchedSet.has(vid)) {
+      watchedSet.add(vid);
+      card.classList.add('watched');
+      // 同步主 grid 里同一视频的 watched 状态
+      document.querySelectorAll(`.card[data-vid="${vid}"]`).forEach(c => c.classList.add('watched'));
+      saveSet(WATCHED_KEY, watchedSet);
+    }
+  };
+});
+
+// 过滤（多维度独立切换：评分单选，平台/新鲜度/分区独立开关，可组合）
+const cards = [...document.querySelectorAll('.card')];
+const emptyEl = document.getElementById('empty');
+
+let fScore   = 0;     // 评分下限（0=全部）
+let fMaxAge  = null;  // 发布天数上限（null=不限）
+let fPlatform = '';   // 平台（''=全部）
+let fCat     = '';    // 分区（''=全部）
+
+function applyFilter() {
+  let visible = 0;
+  cards.forEach(c => {
+    const show =
+      (fScore === 0 || parseInt(c.dataset.score ?? '0') >= fScore)
+      && (fMaxAge === null || parseInt(c.dataset.age ?? '9999') <= fMaxAge)
+      && (fPlatform === '' || c.dataset.platform === fPlatform)
+      && (fCat === '' || c.dataset.cat === fCat);
+    c.style.display = show ? '' : 'none';
+    if (show) visible++;
+  });
+  emptyEl.style.display = visible === 0 ? 'block' : 'none';
+}
+
+document.getElementById('filters').addEventListener('click', e => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+
+  if ('min' in btn.dataset) {
+    // 评分：单选组；点「全部」(min=0) 同时重置平台/新鲜度/分区
+    fScore = parseInt(btn.dataset.min);
+    document.querySelectorAll('#filters button[data-min]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    if (fScore === 0) {
+      fMaxAge = null; fPlatform = ''; fCat = '';
+      document.querySelectorAll('#filters button:not([data-min])').forEach(b => b.classList.remove('active'));
+    }
+
+  } else if ('maxAge' in btn.dataset) {
+    // 新鲜度：toggle——再次点击取消
+    const val = parseInt(btn.dataset.maxAge);
+    if (fMaxAge === val) { fMaxAge = null; btn.classList.remove('active'); }
+    else                 { fMaxAge = val;  btn.classList.add('active'); }
+
+  } else if ('platform' in btn.dataset) {
+    // 平台：toggle——再次点击取消；平台之间互斥
+    const val = btn.dataset.platform;
+    if (fPlatform === val) {
+      fPlatform = ''; btn.classList.remove('active');
+    } else {
+      fPlatform = val;
+      document.querySelectorAll('#filters button[data-platform]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    }
+
+  } else if ('cat' in btn.dataset) {
+    // 分区：toggle——再次点击取消
+    const val = btn.dataset.cat;
+    if (fCat === val) {
+      fCat = ''; btn.classList.remove('active');
+    } else {
+      fCat = val;
+      document.querySelectorAll('#filters button[data-cat]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    }
+  }
+
+  applyFilter();
+});
+</script>
+</body>
+</html>
