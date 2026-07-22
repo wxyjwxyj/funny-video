@@ -112,22 +112,23 @@ def get_claude_config() -> tuple[str, str, str]:
 
     优先级：.env / 环境变量 → cc-switch → config.json → 空字符串
     """
-    cc = _load_cc_switch_config()
-    cfg = _load_config_file()
+    api_key = os.getenv("ANTHROPIC_API_KEY", "")
+    base_url = os.getenv("ANTHROPIC_BASE_URL", "")
+    model = os.getenv("ANTHROPIC_MODEL", "")
+    if api_key and base_url and model:
+        return api_key, base_url, model
 
-    api_key = (
-        os.getenv("ANTHROPIC_API_KEY")
-        or cc.get("api_key")
-        or cfg.get("claude_api_key", "")
-    )
-    base_url = (
-        os.getenv("ANTHROPIC_BASE_URL")
-        or cc.get("base_url")
-        or cfg.get("claude_base_url", "")
-    )
-    model = (
-        os.getenv("ANTHROPIC_MODEL")
-        or cc.get("model")
-        or cfg.get("claude_model", "")
-    )
+    cc = _load_cc_switch_config()
+    api_key = api_key or cc.get("api_key", "")
+    base_url = base_url or cc.get("base_url", "")
+    model = model or cc.get("model", "")
+    if api_key and base_url and model:
+        return api_key, base_url, model
+
+    # 仅当前两级配置仍不完整时才读取旧版 config.json，避免 .env 已齐全时
+    # 输出无意义的“config.json 不存在”告警。
+    cfg = _load_config_file()
+    api_key = api_key or cfg.get("claude_api_key", "")
+    base_url = base_url or cfg.get("claude_base_url", "")
+    model = model or cfg.get("claude_model", "")
     return api_key, base_url, model

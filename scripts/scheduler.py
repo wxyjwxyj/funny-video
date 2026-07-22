@@ -11,6 +11,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from pathlib import Path
+from urllib.parse import urlparse
 
 import yaml
 
@@ -19,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from run_topic import run_pipeline
 from storage.db import init_db
 from topics.registry import list_topics
+from utils.config import get_claude_config
 from utils.log import get_logger
 
 logger = get_logger(__name__)
@@ -35,13 +37,25 @@ def _load_schedule() -> list[dict]:
         return yaml.safe_load(f).get("runs", [])
 
 
-def _find_run(runs: list[dict], now: datetime, tolerance: int = 2) -> dict | None:
+def _find_run(runs: list[dict], now: datetime, tolerance: int = 30) -> dict | None:
+    """匹配最近的计划时间；成功标记可阻止 30 分钟窗口内重复执行。"""
     for run in runs:
         h, m = map(int, run["time"].split(":"))
         target = now.replace(hour=h, minute=m, second=0, microsecond=0)
-        if abs(now - target) <= timedelta(minutes=tolerance):
+        delay = now - target
+        if timedelta(0) <= delay <= timedelta(minutes=tolerance):
             return run
     return None
+
+
+def _network_endpoints() -> list[tuple[str, int]]:
+    """返回主链路实际依赖的网络端点。"""
+    endpoints = {("api.bilibili.com", 443), ("github.com", 443)}
+    _, base_url, _ = get_claude_config()
+    ai_host = urlparse(base_url).hostname if base_url else None
+    if ai_host:
+        endpoints.add((ai_host, 443))
+    return sorted(endpoints)
 
 
 def _already_ran(time_str: str, now: datetime) -> bool:
@@ -85,19 +99,26 @@ def _preflight_check() -> bool:
     issues: list[str] = []
     warnings: list[str] = []
 
-    # 1. 网络连通性（8.8.8.8:53 DNS直连，基本不走代理）
-    try:
-        with socket.create_connection(("8.8.8.8", 53), timeout=5):
-            pass
-    except OSError:
-        issues.append("网络不通 (8.8.8.8:53)")
+    # 1. 检查实际依赖；单个端点异常时继续运行，由对应步骤自行重试/降级。
+    endpoints = _network_endpoints()
+    unreachable: list[str] = []
+    for host, port in endpoints:
+        try:
+            with socket.create_connection((host, port), timeout=3):
+                pass
+        except OSError:
+            unreachable.append(f"{host}:{port}")
+    if endpoints and len(unreachable) == len(endpoints):
+        issues.append("关键网络端点均不可达")
+    elif unreachable:
+        warnings.append(f"部分网络端点不可达 ({', '.join(unreachable)})")
 
     # 2. CDP proxy（抖音/小红书依赖，不通只是降级）
     try:
         with socket.create_connection(("localhost", 3456), timeout=3):
             pass
     except OSError:
-        warnings.append("CDP proxy 不可用，抖音/小红书将跳过")
+        warnings.append("CDP proxy 不可用，搜索采集器将降级")
 
     # 3. DB 目录可写
     try:
@@ -115,7 +136,7 @@ def _preflight_check() -> bool:
         _notify("搞笑视频墙 ❌", f"本次跳过: {' | '.join(issues)}")
         return False
 
-    logger.info("preflight 通过（网络/CDP/DB 均正常）")
+    logger.info("preflight 通过（关键网络/CDP/DB 检查完成）")
     return True
 
 
@@ -201,8 +222,7 @@ def run_all(skip_collect: bool = False, skip_tag: bool = False) -> None:
     init_db(_DB)
     topics = list_topics()
 
-    # 两个 topic 独立采集、打标签、生成，无共享状态，并行跑节省一半时间
-    # 注意：若多个 topic 同时用 CDP，偶发 tab 冲突时会降级（optional collector 不抛异常）
+    # topic 链路并行；CDPCollector 内部按平台加锁，避免共享 tab 导航串墙。
     with ThreadPoolExecutor(max_workers=len(topics)) as pool:
         fut_to_topic = {
             pool.submit(run_pipeline, t, skip_collect=skip_collect, skip_tag=skip_tag): t

@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from storage.db import get_connection, init_db
+from utils.errors import PipelineError
 from utils.log import get_logger
 
 logger = get_logger(__name__)
@@ -238,7 +239,8 @@ def generate(topic: str = "funny", min_score: int = 7, min_like_count: int = 0,
              date: str | None = None, display_name: str | None = None,
              max_published_days: int | None = None,
              archive_dir: Path | None = None,
-             update_index: bool = True) -> Path:
+             update_index: bool = True,
+             fail_on_empty: bool = False) -> Path:
     """生成视频墙 HTML 文件。
 
     Args:
@@ -251,6 +253,7 @@ def generate(topic: str = "funny", min_score: int = 7, min_like_count: int = 0,
         max_published_days: 只展示最近 N 天内发布的内容（None=不限）
         archive_dir: 归档目录（None=自动，用于测试隔离）
         update_index: 是否更新项目首页时间戳；测试或临时输出时可关闭
+        fail_on_empty: 没有候选视频时抛错，避免自动任务覆盖上一版页面
     """
     init_db(_DB_PATH)
 
@@ -283,6 +286,8 @@ def generate(topic: str = "funny", min_score: int = 7, min_like_count: int = 0,
 
     videos = [dict(r) for r in rows]
     if not videos:
+        if fail_on_empty:
+            raise PipelineError(f"generate_wall: {topic} 当日无候选视频，保留上一版页面")
         logger.warning("generate_wall: 无已打标签的视频，生成空页面")
 
     cards_html = "\n".join(_render_card(v) for v in videos)

@@ -7,6 +7,7 @@ import pytest
 from storage.db import init_db, get_connection
 from storage import repository
 from publishers.generate_wall import _render_featured_card, generate
+from utils.errors import PipelineError
 
 # 固定过去日期，避免测试数据污染今日真实归档目录
 _TEST_DATE = "2020-01-01"
@@ -85,3 +86,24 @@ def test_template_filters_featured_cards():
     )
     assert "document.querySelectorAll('.feat-card')" in template
     assert "featuredSection.style.display" in template
+
+
+def test_fail_on_empty_preserves_existing_output(tmp_path, monkeypatch):
+    dbfile = tmp_path / "empty.db"
+    init_db(dbfile)
+    import publishers.generate_wall as gw
+    monkeypatch.setattr(gw, "_DB_PATH", dbfile)
+    out = tmp_path / "wall.html"
+    out.write_text("previous wall", encoding="utf-8")
+
+    with pytest.raises(PipelineError, match="保留上一版"):
+        generate(
+            output=out,
+            date=_TEST_DATE,
+            archive_dir=tmp_path / "archive",
+            update_index=False,
+            fail_on_empty=True,
+        )
+
+    assert out.read_text(encoding="utf-8") == "previous wall"
+    assert not (tmp_path / "archive").exists()

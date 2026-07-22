@@ -4,6 +4,7 @@
 prompt 全英文（避免代理拦截），输出 tags 允许中文。
 """
 import json
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from storage import repository
@@ -23,10 +24,22 @@ def _build_prompt(videos: list[dict], topic: str) -> str:
             "0=clickbait or AI keyword is merely a hashtag, "
             "5=decent AI/tech content, 10=must-watch insight or tutorial"
         )
+        scoring_rules = (
+            "Treat content as relevant only when AI is central to the title. "
+            "Generic entertainment with an AI hashtag must score 0-3."
+        )
     else:
         score_desc = (
-            "humor/entertainment score: "
+            "humor score: "
             "0=not funny or unsafe/NSFW, 5=moderately funny, 10=extremely hilarious"
+        )
+        scoring_rules = (
+            "Judge humor only from explicit evidence in the supplied metadata. "
+            "Popularity, cuteness, spectacle, craftsmanship, news value, or general entertainment "
+            "is not evidence of humor. Tutorials, documentaries, ordinary vlogs, art, crafts, news, "
+            "and serious pet videos must score 0-4 unless the title clearly describes a joke, gag, "
+            "comic mishap, parody, or humorous performance. Scores 7-8 require an explicit comedic "
+            "premise; scores 9-10 require unmistakable strong comedy evidence. When uncertain, score low."
         )
 
     lines = []
@@ -36,12 +49,14 @@ def _build_prompt(videos: list[dict], topic: str) -> str:
         lines.append(
             f"{i+1}. title: {v['title']}"
             f"  author: {v.get('author','')}"
+            f"  category: {v.get('category','')}"
             f"  duration: {v.get('duration',0)}s"
             f"  likes: {like:,}  plays: {play:,}  ratio: {like/play:.1%}"
         )
 
     return (
         f"Rate each video's {score_desc}.\n"
+        f"Scoring rules: {scoring_rules}\n"
         f"Also assign 3-5 Chinese content tags per video.\n\n"
         f"Videos:\n" + "\n".join(lines)
     )
@@ -56,7 +71,7 @@ _RATE_SCHEMA = {
                 "type": "object",
                 "properties": {
                     "id":        {"type": "integer"},
-                    "score":     {"type": "integer"},
+                    "score":     {"type": "integer", "minimum": 0, "maximum": 10},
                     "tags":      {"type": "array", "items": {"type": "string"}},
                     "is_unsafe": {"type": "boolean"},
                 },
@@ -70,19 +85,33 @@ _RATE_SCHEMA = {
 
 def _call_batch(videos: list[dict], topic: str) -> list[dict | None]:
     """调用 Claude 为一批视频评分，返回与 videos 等长的列表（None = 未收到结果，保持 DB NULL 待重试）。"""
-    data = claude_call_tool(
-        _build_prompt(videos, topic),
-        tool_name="rate_videos",
-        tool_description="Rate each video and return scores, tags, and safety flags",
-        input_schema=_RATE_SCHEMA,
-        max_tokens=2048,
-    )
+    data = None
+    for attempt in range(2):
+        try:
+            data = claude_call_tool(
+                _build_prompt(videos, topic),
+                tool_name="rate_videos",
+                tool_description="Rate each video and return scores, tags, and safety flags",
+                input_schema=_RATE_SCHEMA,
+                max_tokens=2048,
+            )
+            if not isinstance(data, dict):
+                raise TypeError(f"工具返回类型错误: {type(data).__name__}")
+            break
+        except Exception as e:
+            if attempt == 1:
+                raise
+            logger.warning("tagging: 批次调用失败，1秒后重试: %s", e)
+            time.sleep(1)
+
     output: list[dict | None] = [None] * len(videos)
     for r in data.get("results", []):
+        if not isinstance(r, dict):
+            continue
         idx = r.get("id", 0) - 1
         if 0 <= idx < len(videos):
             output[idx] = {
-                "score":     int(r.get("score", 5)),
+                "score":     max(0, min(10, int(r.get("score", 5)))),
                 "tags":      r.get("tags", [])[:5],
                 "is_unsafe": bool(r.get("is_unsafe", False)),
             }

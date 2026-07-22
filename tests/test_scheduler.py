@@ -1,4 +1,6 @@
 """调度器发布和失败重试行为测试。"""
+from contextlib import nullcontext
+from datetime import datetime
 import sys
 from types import SimpleNamespace
 
@@ -73,3 +75,38 @@ def test_scheduled_run_marks_only_after_success(monkeypatch):
     with pytest.raises(RuntimeError, match="boom"):
         scheduler.main()
     assert marked == []
+
+
+def test_find_run_keeps_retry_window():
+    runs = [{"time": "13:00"}]
+    assert scheduler._find_run(runs, datetime(2026, 7, 22, 13, 25)) == runs[0]
+    assert scheduler._find_run(runs, datetime(2026, 7, 22, 12, 45)) is None
+    assert scheduler._find_run(runs, datetime(2026, 7, 22, 13, 31)) is None
+
+
+def test_preflight_allows_partial_network_failure(monkeypatch, tmp_path):
+    monkeypatch.setattr(scheduler, "_DB", tmp_path / "video.db")
+    monkeypatch.setattr(scheduler, "_network_endpoints", lambda: [("a", 443), ("b", 443)])
+    monkeypatch.setattr(scheduler, "_notify", lambda *args: None)
+
+    def connect(address, timeout):
+        if address == ("a", 443):
+            raise OSError("down")
+        return nullcontext()
+
+    monkeypatch.setattr(scheduler.socket, "create_connection", connect)
+    assert scheduler._preflight_check() is True
+
+
+def test_preflight_rejects_when_all_network_endpoints_fail(monkeypatch, tmp_path):
+    monkeypatch.setattr(scheduler, "_DB", tmp_path / "video.db")
+    monkeypatch.setattr(scheduler, "_network_endpoints", lambda: [("a", 443), ("b", 443)])
+    monkeypatch.setattr(scheduler, "_notify", lambda *args: None)
+
+    def connect(address, timeout):
+        if address[0] in {"a", "b"}:
+            raise OSError("down")
+        return nullcontext()
+
+    monkeypatch.setattr(scheduler.socket, "create_connection", connect)
+    assert scheduler._preflight_check() is False

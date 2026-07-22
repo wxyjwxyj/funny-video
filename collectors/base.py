@@ -6,6 +6,7 @@
 """
 
 import random
+import threading
 import time
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
@@ -23,6 +24,14 @@ logger = get_logger(__name__)
 # ═══════════════════════════════════════════════════════════════════
 
 _collector_registry: dict[str, type["BaseCollector"]] = {}
+_cdp_domain_locks: dict[str, threading.Lock] = {}
+_cdp_domain_locks_guard = threading.Lock()
+
+
+def _get_cdp_domain_lock(domain: str) -> threading.Lock:
+    """返回平台级进程内锁，避免多个 topic 同时导航同一个 CDP 标签页。"""
+    with _cdp_domain_locks_guard:
+        return _cdp_domain_locks.setdefault(domain, threading.Lock())
 
 
 def register_collector(name: str):
@@ -91,6 +100,13 @@ class CDPCollector(BaseCollector):
     # ── 模板方法 ──
 
     def collect(self) -> list[dict]:
+        # 同一平台的 collector 会定位到同一个浏览器 tab；必须覆盖整个
+        # 导航→读取循环，否则 funny/ai 并发时会读到对方刚导航出的结果。
+        with _get_cdp_domain_lock(self.domain_pattern):
+            return self._collect_locked()
+
+    def _collect_locked(self) -> list[dict]:
+        """持有平台 CDP 锁后执行完整关键词采集。"""
         keywords: list[str] = getattr(self, "keywords", None) or self.default_keywords
         if not self._target_id:
             self._resolve_target()
@@ -119,6 +135,9 @@ class CDPCollector(BaseCollector):
                 raise
             except CollectorError as e:
                 logger.warning("[%s] %s 失败: %s", self.__class__.__name__, kw, e)
+
+        if not results:
+            raise CollectorError(f"{len(keywords)} 个关键词均未采集到结果")
 
         logger.info("[%s] 采集完成，共 %d 条", self.__class__.__name__, len(results))
         return results

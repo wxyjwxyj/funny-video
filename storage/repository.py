@@ -107,6 +107,17 @@ def list_untagged(limit: int | None = 50, topic: str | None = None) -> list[dict
     return [dict(r) for r in rows]
 
 
+def count_untagged(topic: str | None = None) -> int:
+    """返回仍处于 active 的未打标签视频数。"""
+    sql = "SELECT COUNT(*) FROM videos WHERE funny_score IS NULL AND status='active'"
+    params: list = []
+    if topic:
+        sql += " AND topic=?"
+        params.append(topic)
+    with contextlib.closing(get_db()) as conn:
+        return int(conn.execute(sql, params).fetchone()[0])
+
+
 def update_tags(content_hash: str, tags: list[str], funny_score: int, is_unsafe: bool = False) -> None:
     """回写 Claude 打标结果。is_unsafe=True 时直接将视频标为 inactive，不展示。"""
     batch_update_tags([(content_hash, tags, funny_score, is_unsafe)])

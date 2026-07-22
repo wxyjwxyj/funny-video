@@ -13,8 +13,10 @@ import collectors.douyin  # noqa: F401 - 触发 @register_collector
 import collectors.xiaohongshu  # noqa: F401 - 触发 @register_collector
 from pipeline import dedup, tagging
 from publishers.generate_wall import generate
+from storage import repository
 from storage.db import init_db
 from topics.registry import get_topic, list_topics
+from utils.errors import AIApiError, CollectorError
 from utils.log import get_logger
 
 logger = get_logger(__name__)
@@ -62,14 +64,15 @@ def run_pipeline(topic_name: str, *, tag_batch: int | None = None,
                 try:
                     coll = create_collector(cdef.name, topic=config.topic, **cdef.kwargs)
                     videos = coll.collect()
-                    if videos:
-                        counts = dedup.run(videos)
-                        inserted = counts.get("inserted", 0)
-                        total_inserted += inserted
-                        platform = cdef.platform or cdef.name
-                        platform_stats[platform] = platform_stats.get(platform, 0) + inserted
-                        logger.info("[%s] %s 采集 %d 条，去重: %s",
-                                    topic_name, cdef.name, len(videos), counts)
+                    if not videos:
+                        raise CollectorError(f"{cdef.name} 返回 0 条，视为采集异常")
+                    counts = dedup.run(videos)
+                    inserted = counts.get("inserted", 0)
+                    total_inserted += inserted
+                    platform = cdef.platform or cdef.name
+                    platform_stats[platform] = platform_stats.get(platform, 0) + inserted
+                    logger.info("[%s] %s 采集 %d 条，去重: %s",
+                                topic_name, cdef.name, len(videos), counts)
                     last_err = None
                     break                      # 成功，不重试
                 except Exception as e:
@@ -91,13 +94,18 @@ def run_pipeline(topic_name: str, *, tag_batch: int | None = None,
     # ── 打标签 ──
     tagged = 0
     if not skip_tag:
+        pending_before = repository.count_untagged(topic=config.topic)
         tagged = tagging.run(batch_size=tag_batch, topic=config.topic)
         logger.info("[%s] 打标签: %d 条", topic_name, tagged)
+        if pending_before > 0 and tagged == 0:
+            raise AIApiError(
+                f"[{topic_name}] {pending_before} 条待打标视频全部失败，保留上一版视频墙"
+            )
 
     # ── 生成 ──
     out = generate(topic=config.topic, min_score=min_score,
                    min_like_count=config.min_like_count, display_name=config.display_name,
-                   max_published_days=config.max_published_days)
+                   max_published_days=config.max_published_days, fail_on_empty=True)
     logger.info("[%s] 完成，视频墙: %s", topic_name, out)
 
     return {

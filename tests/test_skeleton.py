@@ -1,6 +1,8 @@
 """阶段 0 骨架冒烟测试：utils/storage 能导入、能建库、schema 关键字段在位。"""
 import contextlib
 
+import pytest
+
 from storage import db
 from utils import claude, errors, log  # noqa: F401  确保可导入
 from utils.config import get_claude_config
@@ -20,6 +22,24 @@ def test_claude_config_shape():
     """配置读取返回三元组（值可能为空，取决于 .env / cc-switch）。"""
     cfg = get_claude_config()
     assert isinstance(cfg, tuple) and len(cfg) == 3
+
+
+def test_complete_env_does_not_read_legacy_config(monkeypatch):
+    from utils import config
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "key")
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://example.com")
+    monkeypatch.setenv("ANTHROPIC_MODEL", "model")
+    monkeypatch.setattr(
+        config, "_load_config_file",
+        lambda: pytest.fail("完整 .env 不应读取 config.json"),
+    )
+    monkeypatch.setattr(
+        config, "_load_cc_switch_config",
+        lambda: pytest.fail("完整 .env 不应读取 cc-switch"),
+    )
+
+    assert config.get_claude_config() == ("key", "https://example.com", "model")
 
 
 def test_db_init_and_schema(tmp_path):
