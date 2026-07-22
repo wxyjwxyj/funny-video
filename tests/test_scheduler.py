@@ -59,6 +59,65 @@ def test_push_walls_stops_when_commit_fails(monkeypatch):
     assert ["git", "push"] not in calls
 
 
+def test_push_walls_never_stages_unrelated_worktree_files(monkeypatch):
+    calls: list[list[str]] = []
+
+    def fake_run(args, **kwargs):
+        calls.append(args)
+        if args[:3] == ["git", "diff", "--name-only"]:
+            return _result(stdout="run_topic.py\nAGENTS.md\n")
+        if args[:4] == ["git", "ls-files", "--others", "--exclude-standard"]:
+            return _result(stdout="verify_screenshot.png\n")
+        return _result()
+
+    monkeypatch.setattr(scheduler.subprocess, "run", fake_run)
+
+    scheduler._push_walls()
+
+    assert not any(call[:2] == ["git", "add"] for call in calls)
+
+
+def test_push_walls_retries_unpushed_wall_commit_when_files_are_clean(monkeypatch):
+    calls: list[list[str]] = []
+
+    def fake_run(args, **kwargs):
+        calls.append(args)
+        if args[:3] == ["git", "log", "--format=%H"]:
+            return _result(stdout="deadbeef\n")
+        return _result()
+
+    monkeypatch.setattr(scheduler.subprocess, "run", fake_run)
+    monkeypatch.setattr(scheduler, "_notify", lambda *args: None)
+
+    scheduler._push_walls()
+
+    assert ["git", "push"] in calls
+
+
+def test_push_walls_propagates_push_failure_for_later_retry(monkeypatch):
+    calls: list[list[str]] = []
+    responses = iter([
+        _result(stdout="funny_wall.html\n"),
+        _result(),
+        _result(),
+        _result(),
+        _result(stdout="committed"),
+        _result(returncode=1, stderr="network down"),
+    ])
+
+    def fake_run(args, **kwargs):
+        calls.append(args)
+        return next(responses)
+
+    monkeypatch.setattr(scheduler.subprocess, "run", fake_run)
+    monkeypatch.setattr(scheduler, "_notify", lambda *args: None)
+
+    with pytest.raises(RuntimeError, match="推送失败"):
+        scheduler._push_walls()
+
+    assert calls[-1] == ["git", "push"]
+
+
 def test_scheduled_run_marks_only_after_success(monkeypatch):
     marked: list[tuple] = []
     monkeypatch.setattr(sys, "argv", ["scheduler.py"])
@@ -75,6 +134,33 @@ def test_scheduled_run_marks_only_after_success(monkeypatch):
     with pytest.raises(RuntimeError, match="boom"):
         scheduler.main()
     assert marked == []
+
+
+def test_run_all_reports_topic_failure_after_publishing_successful_topic(monkeypatch):
+    published: list[bool] = []
+    monkeypatch.setattr(scheduler, "init_db", lambda _: None)
+    monkeypatch.setattr(scheduler, "list_topics", lambda: ["funny", "ai"])
+    monkeypatch.setattr(scheduler, "_cleanup_old_videos", lambda: None)
+    monkeypatch.setattr(scheduler, "_push_walls", lambda: published.append(True))
+    monkeypatch.setattr(scheduler, "_notify", lambda *args: None)
+
+    def run_pipeline(topic, **kwargs):
+        if topic == "ai":
+            raise RuntimeError("AI tagging unavailable")
+        return {
+            "topic": topic,
+            "inserted": 2,
+            "tagged": 2,
+            "platforms": {"bilibili": 2},
+            "failed": [],
+        }
+
+    monkeypatch.setattr(scheduler, "run_pipeline", run_pipeline)
+
+    with pytest.raises(RuntimeError, match="ai"):
+        scheduler.run_all()
+
+    assert published == [True]
 
 
 def test_find_run_keeps_retry_window():

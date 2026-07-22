@@ -197,6 +197,32 @@ def test_init_db_migrates_legacy_topic_hash(tmp_path):
     assert row["content_hash"] == "douyin_funny:123"
 
 
+def test_init_db_migration_keeps_scoped_row_when_legacy_hash_collides(tmp_path):
+    """迁移遇到新旧哈希并存时，必须保留已经按 topic 隔离的新记录。"""
+    dbfile = tmp_path / "collision.db"
+    init_db(dbfile)
+    with contextlib.closing(get_connection(dbfile)) as conn:
+        with conn:
+            conn.execute(
+                "INSERT INTO videos(topic, platform, platform_video_id, title, content_hash) "
+                "VALUES('ai', 'douyin', 'same', 'legacy', 'douyin:same')"
+            )
+            conn.execute(
+                "INSERT INTO videos(topic, platform, platform_video_id, title, content_hash) "
+                "VALUES('ai', 'douyin', 'same', 'scoped', 'douyin_ai:same')"
+            )
+
+    init_db(dbfile)
+
+    with contextlib.closing(get_connection(dbfile)) as conn:
+        rows = conn.execute(
+            "SELECT title, content_hash FROM videos WHERE platform_video_id='same'"
+        ).fetchall()
+    assert [(row["title"], row["content_hash"]) for row in rows] == [
+        ("scoped", "douyin_ai:same"),
+    ]
+
+
 def test_upsert_extra_serialized(db_path):
     v = _make_video("BVccc")
     v["extra"] = {"coin": 99}
@@ -226,6 +252,27 @@ def test_list_untagged(db_path):
     hashes = {v["content_hash"] for v in untagged}
     assert "bilibili:BVx" in hashes
     assert "bilibili:BVy" not in hashes
+
+
+def test_untagged_queries_isolate_topic_and_ignore_inactive(db_path):
+    funny = {**_make_video("BVfunny"), "topic": "funny"}
+    ai = {
+        **_make_video("BVai"),
+        "topic": "ai",
+        "content_hash": "bilibili_ai:BVai",
+    }
+    inactive = {
+        **_make_video("BVinactive"),
+        "topic": "funny",
+        "status": "inactive",
+    }
+    repository.upsert_videos([funny, ai, inactive])
+
+    assert repository.count_untagged(topic="funny") == 1
+    assert repository.count_untagged(topic="ai") == 1
+    assert {
+        row["content_hash"] for row in repository.list_untagged(topic="funny")
+    } == {"bilibili:BVfunny"}
 
 
 def test_update_tags(db_path):

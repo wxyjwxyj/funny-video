@@ -1,4 +1,5 @@
 """视频墙生成器测试。"""
+import contextlib
 import json
 from pathlib import Path
 
@@ -6,7 +7,7 @@ import pytest
 
 from storage.db import init_db, get_connection
 from storage import repository
-from publishers.generate_wall import _render_featured_card, generate
+from publishers.generate_wall import _render_card, _render_featured_card, generate
 from utils.errors import PipelineError
 
 # 固定过去日期，避免测试数据污染今日真实归档目录
@@ -107,3 +108,62 @@ def test_fail_on_empty_preserves_existing_output(tmp_path, monkeypatch):
 
     assert out.read_text(encoding="utf-8") == "previous wall"
     assert not (tmp_path / "archive").exists()
+
+
+def test_generate_enforces_topic_status_score_and_like_filters(seeded_db, tmp_path):
+    rows = [
+        ("funny", "valid", "应展示", 9, 6000, "active"),
+        ("ai", "wrong-topic", "错误主题", 10, 9000, "active"),
+        ("funny", "inactive", "已停用", 10, 9000, "inactive"),
+        ("funny", "low-like", "点赞不足", 10, 4999, "active"),
+    ]
+    with contextlib.closing(get_connection(seeded_db)) as conn:
+        with conn:
+            conn.executemany(
+                "INSERT INTO videos(topic, platform, platform_video_id, title, "
+                "like_count, funny_score, status, content_hash, fetched_at, created_at) "
+                "VALUES(?, 'bilibili', ?, ?, ?, ?, ?, ?, ?, ?)",
+                [
+                    (topic, vid, title, likes, score, status, f"{topic}:{vid}",
+                     _TEST_FETCHED_AT, _TEST_FETCHED_AT)
+                    for topic, vid, title, score, likes, status in rows
+                ],
+            )
+
+    out = generate(
+        topic="funny",
+        min_score=7,
+        min_like_count=5000,
+        output=tmp_path / "wall.html",
+        date=_TEST_DATE,
+        archive_dir=tmp_path / "archive",
+        update_index=False,
+    )
+    content = out.read_text(encoding="utf-8")
+
+    assert "应展示" in content
+    assert "错误主题" not in content
+    assert "已停用" not in content
+    assert "点赞不足" not in content
+
+
+def test_render_card_escapes_metadata_and_rejects_script_urls():
+    html = _render_card({
+        "topic": "funny",
+        "funny_score": 9,
+        "title": "<script>alert(1)</script>",
+        "author": "<img src=x onerror=alert(1)>",
+        "tags": json.dumps(["<b>标签</b>"]),
+        "page_url": "javascript:alert(1)",
+        "cover_url": "javascript:alert(2)",
+        "category": "搞笑\" data-evil=\"1",
+        "platform": "douyin",
+        "content_hash": "douyin_funny:1",
+    })
+
+    assert "<script>" not in html
+    assert "<img src=x" not in html
+    assert "<b>标签</b>" not in html
+    assert "javascript:" not in html
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in html
+    assert 'data-href=""' in html

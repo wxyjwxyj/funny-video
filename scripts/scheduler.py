@@ -161,6 +161,29 @@ def _cleanup_old_videos() -> None:
         logger.info("DB清理: 标记 %d 条旧低分/未标签视频为 inactive", cur.rowcount)
 
 
+def _has_unpushed_wall_commit() -> bool:
+    """检查本地相对上游是否有涉及视频墙文件的未推送提交。"""
+    result = subprocess.run(
+        ["git", "log", "--format=%H", "@{u}..HEAD", "--", *_EXPECTED_FILES],
+        capture_output=True, text=True, cwd=_ROOT,
+    )
+    if result.returncode != 0:
+        logger.warning("检查待补推提交失败: %s", result.stderr.strip())
+        return False
+    return bool(result.stdout.strip())
+
+
+def _push_current_branch() -> None:
+    """推送当前分支；失败时抛错，让调度窗口内的下一轮继续补推。"""
+    push = subprocess.run(["git", "push"], cwd=_ROOT, capture_output=True, text=True)
+    if push.returncode != 0:
+        message = f"GitHub Pages 推送失败: {push.stderr.strip()}"
+        logger.error(message)
+        _notify("搞笑视频墙 ⚠️", "push 失败，下次运行会重试")
+        raise RuntimeError(message)
+    logger.info("GitHub Pages 推送完成")
+
+
 def _push_walls() -> None:
     changed: set[str] = set()
     commands = (
@@ -181,6 +204,10 @@ def _push_walls() -> None:
         f for f in changed if any(f == p or f.startswith(p) for p in _EXPECTED_FILES)
     )
     if not targets:
+        if _has_unpushed_wall_commit():
+            logger.info("发现上次未推送的视频墙提交，立即补推")
+            _push_current_branch()
+            return
         logger.info("无视频墙文件变更，跳过推送")
         return
 
@@ -208,14 +235,7 @@ def _push_walls() -> None:
         _notify("搞笑视频墙 ⚠️", message)
         raise RuntimeError(message)
 
-    push = subprocess.run(["git", "push"], cwd=_ROOT, capture_output=True, text=True)
-    if push.returncode != 0:
-        message = f"GitHub Pages 推送失败: {push.stderr.strip()}"
-        logger.error(message)
-        _notify("搞笑视频墙 ⚠️", f"push 失败，下次运行会重试")
-        raise RuntimeError(message)
-    else:
-        logger.info("GitHub Pages 推送完成")
+    _push_current_branch()
 
 
 def run_all(skip_collect: bool = False, skip_tag: bool = False) -> None:
@@ -229,12 +249,14 @@ def run_all(skip_collect: bool = False, skip_tag: bool = False) -> None:
             for t in topics
         }
         results: list[dict] = []
+        pipeline_errors: list[tuple[str, Exception]] = []
         for future in as_completed(fut_to_topic):
             t = fut_to_topic[future]
             try:
                 results.append(future.result())
-            except Exception:
+            except Exception as e:
                 logger.exception("[%s] 链路异常，跳过继续", t)
+                pipeline_errors.append((t, e))
                 results.append({"topic": t, "inserted": 0, "tagged": 0,
                                  "platforms": {}, "failed": [(t, "异常")]})
 
@@ -265,6 +287,10 @@ def run_all(skip_collect: bool = False, skip_tag: bool = False) -> None:
     else:
         _notify("搞笑视频墙 ✅",
                 f"{stats_str}  {time.strftime('%H:%M')}")
+
+    if pipeline_errors:
+        failed_topics = ", ".join(topic for topic, _ in pipeline_errors)
+        raise RuntimeError(f"topic 流水线失败，等待调度补跑: {failed_topics}")
 
 
 def main() -> None:

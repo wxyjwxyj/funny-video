@@ -40,3 +40,26 @@ def test_call_batch_retries_and_clamps_score(monkeypatch):
 
     assert calls == 2
     assert result[0]["score"] == 10
+
+
+def test_run_writes_only_received_results_and_leaves_missing_for_retry(monkeypatch):
+    videos = [
+        {"title": "已返回", "content_hash": "funny:1"},
+        {"title": "未返回", "content_hash": "funny:2"},
+    ]
+    writes: list[tuple[str, list[str], int, bool]] = []
+    monkeypatch.setattr(tagging.repository, "list_untagged", lambda **kwargs: videos)
+    monkeypatch.setattr(
+        tagging,
+        "_call_batch",
+        lambda batch, topic: [
+            {"score": 8, "tags": ["搞笑"], "is_unsafe": False},
+            None,
+        ],
+    )
+    monkeypatch.setattr(tagging, "batch_update_tags", lambda items: writes.extend(items))
+
+    tagged = tagging.run(workers=1, topic="funny")
+
+    assert tagged == 1
+    assert writes == [("funny:1", ["搞笑"], 8, False)]
