@@ -3,12 +3,17 @@
 fire-and-forget 模式：脚本检查时间 → 匹配就跑 → 退出。
 OS (launchd) 负责周期触发，无需常驻进程。
 """
+import fcntl
+import os
+import shlex
+import shutil
 import socket
 import subprocess
 import sys
 import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextlib import contextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
 from urllib.parse import urlparse
@@ -30,6 +35,8 @@ _DB = _ROOT / "video.db"
 _SCHEDULE = _ROOT / "schedule.yaml"
 _RAN_DIR = _ROOT / ".ran"
 _EXPECTED_FILES = ["funny_wall.html", "ai_wall.html", "funny_archive/", "ai_archive/", "index.html"]
+_LOG_PATH = Path.home() / "funny_video_launchd.log"
+_RUN_LOCK = Path(tempfile.gettempdir()) / f"funny-video-scheduler-{os.getuid()}.lock"
 
 
 def _load_schedule() -> list[dict]:
@@ -85,13 +92,79 @@ def _rotate_launchd_log(max_bytes: int = 2 * 1024 * 1024, keep_lines: int = 500)
         logger.warning("launchd 日志轮转失败: %s", e)
 
 
-def _notify(title: str, message: str) -> None:
-    """发送 macOS 系统通知，失败静默忽略。"""
-    script = f'display notification "{message}" with title "{title}"'
+def _terminal_notifier_path() -> Path | None:
+    """定位 terminal-notifier；launchd 的 PATH 通常不含 Homebrew。"""
+    found = shutil.which("terminal-notifier")
+    if found:
+        return Path(found)
+    for candidate in (
+        Path("/opt/homebrew/bin/terminal-notifier"),
+        Path("/usr/local/bin/terminal-notifier"),
+    ):
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def _retry_command() -> str:
+    """返回通知点击后执行的安全补跑命令，输出追加到原 launchd 日志。"""
+    command = shlex.join([sys.executable, str(Path(__file__).resolve()), "--once"])
+    return f"{command} >> {shlex.quote(str(_LOG_PATH))} 2>&1"
+
+
+def _notify(title: str, message: str, *, retry: bool = False) -> None:
+    """发送 macOS 通知；retry=True 时点击通知立即补跑一次。"""
+    display_message = f"{message}（点击重跑）" if retry else message
+    notifier = _terminal_notifier_path()
+    if notifier:
+        args = [
+            str(notifier),
+            "-title", title,
+            "-message", display_message,
+            "-group", "funny-video-status",
+        ]
+        if retry:
+            args.extend(["-execute", _retry_command()])
+        try:
+            result = subprocess.run(args, capture_output=True, timeout=5)
+            if result.returncode == 0:
+                return
+        except Exception:
+            pass
+
+    # terminal-notifier 不可用或调用失败时，降级为不可点击的系统通知。
+    if retry:
+        display_message = f"{message}（通知组件不可用，请手动执行 scheduler.py --once）"
+    script = (
+        "on run argv\n"
+        "display notification (item 2 of argv) with title (item 1 of argv)\n"
+        "end run"
+    )
     try:
-        subprocess.run(["osascript", "-e", script], capture_output=True, timeout=5)
+        subprocess.run(
+            ["osascript", "-e", script, "--", title, display_message],
+            capture_output=True, timeout=5,
+        )
     except Exception:
         pass
+
+
+@contextmanager
+def _run_lock():
+    """进程级非阻塞锁，防止通知补跑和 launchd 定时任务并发执行。"""
+    lock_file = _RUN_LOCK.open("a+")
+    try:
+        try:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            yield False
+            return
+        try:
+            yield True
+        finally:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+    finally:
+        lock_file.close()
 
 
 def _preflight_check() -> bool:
@@ -133,7 +206,7 @@ def _preflight_check() -> bool:
 
     if issues:
         logger.error("preflight 失败，跳过本次运行: %s", " | ".join(issues))
-        _notify("搞笑视频墙 ❌", f"本次跳过: {' | '.join(issues)}")
+        _notify("搞笑视频墙 ❌", f"本次跳过: {' | '.join(issues)}", retry=True)
         return False
 
     logger.info("preflight 通过（关键网络/CDP/DB 检查完成）")
@@ -179,7 +252,7 @@ def _push_current_branch() -> None:
     if push.returncode != 0:
         message = f"GitHub Pages 推送失败: {push.stderr.strip()}"
         logger.error(message)
-        _notify("搞笑视频墙 ⚠️", "push 失败，下次运行会重试")
+        _notify("搞笑视频墙 ⚠️", "push 失败，下次运行会重试", retry=True)
         raise RuntimeError(message)
     logger.info("GitHub Pages 推送完成")
 
@@ -283,7 +356,11 @@ def run_all(skip_collect: bool = False, skip_tag: bool = False) -> None:
     if all_failed:
         # 格式示例："抖音(CDP连接)  小红书(超时)"，方便一眼定位原因
         fail_parts = "  ".join(f"{name}({reason})" for name, reason in all_failed)
-        _notify("搞笑视频墙 ⚠️", f"{stats_str}  失败: {fail_parts}")
+        _notify(
+            "搞笑视频墙 ⚠️",
+            f"{stats_str}  失败: {fail_parts}",
+            retry=bool(pipeline_errors),
+        )
     else:
         _notify("搞笑视频墙 ✅",
                 f"{stats_str}  {time.strftime('%H:%M')}")
@@ -304,9 +381,20 @@ def main() -> None:
     _rotate_launchd_log()
 
     if args.once:
-        if not _preflight_check():
-            sys.exit(1)
-        run_all(skip_collect=args.no_collect, skip_tag=args.no_tag)
+        with _run_lock() as acquired:
+            if not acquired:
+                logger.warning("已有调度任务正在运行，忽略重复补跑")
+                _notify("搞笑视频墙 ⏳", "已有任务正在运行，无需重复启动")
+                return
+            if not _preflight_check():
+                sys.exit(1)
+            run_all(skip_collect=args.no_collect, skip_tag=args.no_tag)
+            # 点击通知通常发生在计划时间后的补跑窗口内。成功后写标记，
+            # 避免下一次 5 分钟 launchd 触发再次执行同一计划。
+            now = datetime.now()
+            matched = _find_run(_load_schedule(), now)
+            if matched is not None:
+                _mark_ran(matched["time"], now)
         return
 
     now = datetime.now()
@@ -314,15 +402,20 @@ def main() -> None:
     if matched is None:
         sys.exit(0)
 
-    if _already_ran(matched["time"], now):
-        sys.exit(0)
+    with _run_lock() as acquired:
+        if not acquired:
+            logger.info("已有调度任务正在运行，本轮跳过")
+            sys.exit(0)
+        # 获锁后重新检查，避免另一个进程刚完成并写入成功标记。
+        if _already_ran(matched["time"], now):
+            sys.exit(0)
 
-    # 时间匹配后才做 preflight，避免每5分钟都检查一遍
-    if not _preflight_check():
-        sys.exit(1)
+        # 时间匹配后才做 preflight，避免每5分钟都检查一遍
+        if not _preflight_check():
+            sys.exit(1)
 
-    run_all()
-    _mark_ran(matched["time"], now)
+        run_all()
+        _mark_ran(matched["time"], now)
 
 
 if __name__ == "__main__":
