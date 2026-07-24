@@ -138,21 +138,30 @@ def test_scheduled_run_marks_only_after_success(monkeypatch, tmp_path):
     assert marked == []
 
 
-def test_once_success_marks_current_schedule_to_avoid_duplicate(monkeypatch, tmp_path):
+def test_once_marks_starting_schedule_even_if_run_finishes_after_window(monkeypatch, tmp_path):
     marked: list[tuple] = []
-    run = {"time": "13:00"}
+    clock = {"now": datetime(2026, 7, 24, 8, 28)}
+
+    class FakeDateTime:
+        @classmethod
+        def now(cls):
+            return clock["now"]
+
+    def run_all(**kwargs):
+        clock["now"] = datetime(2026, 7, 24, 8, 31)
+
     monkeypatch.setattr(sys, "argv", ["scheduler.py", "--once"])
     monkeypatch.setattr(scheduler, "_RUN_LOCK", tmp_path / "scheduler.lock")
+    monkeypatch.setattr(scheduler, "datetime", FakeDateTime)
     monkeypatch.setattr(scheduler, "_rotate_launchd_log", lambda: None)
     monkeypatch.setattr(scheduler, "_preflight_check", lambda: True)
-    monkeypatch.setattr(scheduler, "run_all", lambda **kwargs: None)
-    monkeypatch.setattr(scheduler, "_load_schedule", lambda: [run])
-    monkeypatch.setattr(scheduler, "_find_run", lambda runs, now: run)
+    monkeypatch.setattr(scheduler, "run_all", run_all)
+    monkeypatch.setattr(scheduler, "_load_schedule", lambda: [{"time": "08:00"}])
     monkeypatch.setattr(scheduler, "_mark_ran", lambda *args: marked.append(args))
 
     scheduler.main()
 
-    assert marked and marked[0][0] == "13:00"
+    assert marked == [("08:00", datetime(2026, 7, 24, 8, 28))]
 
 
 def test_run_all_reports_topic_failure_after_publishing_successful_topic(monkeypatch):

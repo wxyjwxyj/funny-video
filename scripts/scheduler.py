@@ -386,15 +386,15 @@ def main() -> None:
                 logger.warning("已有调度任务正在运行，忽略重复补跑")
                 _notify("搞笑视频墙 ⏳", "已有任务正在运行，无需重复启动")
                 return
+            started_at = datetime.now()
+            matched = _find_run(_load_schedule(), started_at)
             if not _preflight_check():
                 sys.exit(1)
             run_all(skip_collect=args.no_collect, skip_tag=args.no_tag)
             # 点击通知通常发生在计划时间后的补跑窗口内。成功后写标记，
             # 避免下一次 5 分钟 launchd 触发再次执行同一计划。
-            now = datetime.now()
-            matched = _find_run(_load_schedule(), now)
             if matched is not None:
-                _mark_ran(matched["time"], now)
+                _mark_ran(matched["time"], started_at)
         return
 
     now = datetime.now()
