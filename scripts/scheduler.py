@@ -5,9 +5,9 @@ OS (launchd) 负责周期触发，无需常驻进程。
 """
 import fcntl
 import os
+import re
 import shlex
 import shutil
-import socket
 import subprocess
 import sys
 import tempfile
@@ -16,8 +16,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
-from urllib.parse import urlparse
 
+import requests
 import yaml
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -26,6 +26,7 @@ from run_topic import run_pipeline
 from storage.db import init_db
 from topics.registry import list_topics
 from utils.config import get_claude_config
+from utils.http import retry_session
 from utils.log import get_logger
 
 logger = get_logger(__name__)
@@ -44,25 +45,61 @@ def _load_schedule() -> list[dict]:
         return yaml.safe_load(f).get("runs", [])
 
 
-def _find_run(runs: list[dict], now: datetime, tolerance: int = 30) -> dict | None:
-    """匹配最近的计划时间；成功标记可阻止 30 分钟窗口内重复执行。"""
+def _find_run(runs: list[dict], now: datetime) -> dict | None:
+    """返回今天已到点的最新场次；其成功标记会阻止重复执行。"""
+    matched: tuple[datetime, dict] | None = None
     for run in runs:
         h, m = map(int, run["time"].split(":"))
         target = now.replace(hour=h, minute=m, second=0, microsecond=0)
-        delay = now - target
-        if timedelta(0) <= delay <= timedelta(minutes=tolerance):
-            return run
-    return None
+        if target <= now and (matched is None or target > matched[0]):
+            matched = (target, run)
+    return matched[1] if matched else None
 
 
-def _network_endpoints() -> list[tuple[str, int]]:
-    """返回主链路实际依赖的网络端点。"""
-    endpoints = {("api.bilibili.com", 443), ("github.com", 443)}
+def _is_interactive_session() -> bool:
+    """合盖暗唤醒时返回 False；合盖外接屏且用户活跃时仍允许运行。"""
+    try:
+        clamshell = subprocess.run(
+            ["ioreg", "-r", "-k", "AppleClamshellState", "-d", "4"],
+            capture_output=True,
+            text=True,
+            timeout=3,
+        )
+    except (OSError, subprocess.TimeoutExpired) as e:
+        logger.warning("无法读取合盖状态，按可运行处理: %s", e)
+        return True
+    if clamshell.returncode != 0:
+        logger.warning("无法读取合盖状态，按可运行处理: %s", clamshell.stderr.strip())
+        return True
+    if not re.search(r'"AppleClamshellState"\s*=\s*Yes\b', clamshell.stdout):
+        return True
+
+    try:
+        assertions = subprocess.run(
+            ["pmset", "-g", "assertions"],
+            capture_output=True,
+            text=True,
+            timeout=3,
+        )
+    except (OSError, subprocess.TimeoutExpired) as e:
+        logger.info("合盖且无法确认用户活跃，本轮延后: %s", e)
+        return False
+    if assertions.returncode != 0:
+        logger.info("合盖且无法确认用户活跃，本轮延后")
+        return False
+    return bool(re.search(r"^\s*UserIsActive\s+1\b", assertions.stdout, re.MULTILINE))
+
+
+def _network_endpoints() -> list[tuple[str, str]]:
+    """返回主链路的 HTTP 探测地址；requests 会沿用系统代理环境。"""
+    endpoints = [
+        ("B站", "https://api.bilibili.com/x/web-interface/popular?pn=1&ps=1"),
+        ("GitHub", "https://github.com/"),
+    ]
     _, base_url, _ = get_claude_config()
-    ai_host = urlparse(base_url).hostname if base_url else None
-    if ai_host:
-        endpoints.add((ai_host, 443))
-    return sorted(endpoints)
+    if base_url:
+        endpoints.append(("AI服务", f"{base_url.rstrip('/')}/v1/messages"))
+    return endpoints
 
 
 def _already_ran(time_str: str, now: datetime) -> bool:
@@ -126,11 +163,20 @@ def _notify(title: str, message: str, *, retry: bool = False) -> None:
         if retry:
             args.extend(["-execute", _retry_command()])
         try:
-            result = subprocess.run(args, capture_output=True, timeout=5)
+            result = subprocess.run(args, capture_output=True, text=True, timeout=5)
             if result.returncode == 0:
+                logger.info(
+                    "通知发送成功: backend=terminal-notifier clickable=%s",
+                    retry,
+                )
                 return
-        except Exception:
-            pass
+            logger.warning(
+                "通知发送失败: backend=terminal-notifier exit=%d error=%s",
+                result.returncode,
+                result.stderr.strip(),
+            )
+        except Exception as e:
+            logger.warning("通知发送失败: backend=terminal-notifier error=%s", e)
 
     # terminal-notifier 不可用或调用失败时，降级为不可点击的系统通知。
     if retry:
@@ -141,12 +187,20 @@ def _notify(title: str, message: str, *, retry: bool = False) -> None:
         "end run"
     )
     try:
-        subprocess.run(
+        result = subprocess.run(
             ["osascript", "-e", script, "--", title, display_message],
-            capture_output=True, timeout=5,
+            capture_output=True, text=True, timeout=5,
         )
-    except Exception:
-        pass
+        if result.returncode == 0:
+            logger.info("通知发送成功: backend=osascript clickable=False")
+        else:
+            logger.warning(
+                "通知发送失败: backend=osascript exit=%d error=%s",
+                result.returncode,
+                result.stderr.strip(),
+            )
+    except Exception as e:
+        logger.warning("通知发送失败: backend=osascript error=%s", e)
 
 
 @contextmanager
@@ -172,26 +226,48 @@ def _preflight_check() -> bool:
     issues: list[str] = []
     warnings: list[str] = []
 
-    # 1. 检查实际依赖；单个端点异常时继续运行，由对应步骤自行重试/降级。
+    # 1. 通过 requests 检查实际 HTTP 链路，确保探测和业务请求使用同一代理环境。
     endpoints = _network_endpoints()
     unreachable: list[str] = []
-    for host, port in endpoints:
-        try:
-            with socket.create_connection((host, port), timeout=3):
-                pass
-        except OSError:
-            unreachable.append(f"{host}:{port}")
+    network_session = retry_session(retries=0)
+    try:
+        for name, url in endpoints:
+            headers = {"User-Agent": "funny-video-preflight/1.0"}
+            if name == "B站":
+                headers["Referer"] = "https://www.bilibili.com/"
+            try:
+                response = network_session.get(
+                    url,
+                    headers=headers,
+                    timeout=5,
+                    allow_redirects=True,
+                )
+                if response.status_code >= 500:
+                    unreachable.append(f"{name}(HTTP {response.status_code})")
+            except (requests.RequestException, OSError) as e:
+                logger.info("网络探测失败: %s %s", name, e)
+                unreachable.append(name)
+    finally:
+        network_session.close()
     if endpoints and len(unreachable) == len(endpoints):
         issues.append("关键网络端点均不可达")
     elif unreachable:
         warnings.append(f"部分网络端点不可达 ({', '.join(unreachable)})")
 
-    # 2. CDP proxy（抖音/小红书依赖，不通只是降级）
+    # 2. CDP proxy 要验证服务和返回结构；仅端口可连不代表代理已就绪。
+    cdp_session = retry_session(retries=0)
+    cdp_session.trust_env = False
     try:
-        with socket.create_connection(("localhost", 3456), timeout=3):
-            pass
-    except OSError:
+        response = cdp_session.get("http://localhost:3456/targets", timeout=3)
+        response.raise_for_status()
+        targets = response.json()
+        if not isinstance(targets, list):
+            raise ValueError("/targets 返回的不是列表")
+    except (requests.RequestException, OSError, ValueError) as e:
+        logger.info("CDP proxy 探测失败: %s", e)
         warnings.append("CDP proxy 不可用，搜索采集器将降级")
+    finally:
+        cdp_session.close()
 
     # 3. DB 目录可写
     try:
@@ -202,7 +278,6 @@ def _preflight_check() -> bool:
 
     if warnings:
         logger.warning("preflight 警告: %s", " | ".join(warnings))
-        _notify("搞笑视频墙 ⚠️", " | ".join(warnings))
 
     if issues:
         logger.error("preflight 失败，跳过本次运行: %s", " | ".join(issues))
@@ -409,6 +484,10 @@ def main() -> None:
         # 获锁后重新检查，避免另一个进程刚完成并写入成功标记。
         if _already_ran(matched["time"], now):
             sys.exit(0)
+
+        if not _is_interactive_session():
+            logger.info("检测到合盖暗唤醒，本轮延后，开盖后自动补跑")
+            return
 
         # 时间匹配后才做 preflight，避免每5分钟都检查一遍
         if not _preflight_check():
