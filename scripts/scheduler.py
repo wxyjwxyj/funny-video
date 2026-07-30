@@ -38,6 +38,14 @@ _RAN_DIR = _ROOT / ".ran"
 _EXPECTED_FILES = ["funny_wall.html", "ai_wall.html", "funny_archive/", "ai_archive/", "index.html"]
 _LOG_PATH = Path.home() / "funny_video_launchd.log"
 _RUN_LOCK = Path(tempfile.gettempdir()) / f"funny-video-scheduler-{os.getuid()}.lock"
+_MAX_AUTO_ATTEMPTS = 3
+_CDP_PROXY = "http://localhost:3456"
+_REQUIRED_CDP_TABS = (
+    ("B站", "bilibili.com", "https://www.bilibili.com/"),
+    ("抖音", "douyin.com", "https://www.douyin.com/"),
+    ("小红书", "xiaohongshu.com", "https://www.xiaohongshu.com/explore"),
+)
+_CURRENT_RUN_REF: str | None = None
 
 
 def _load_schedule() -> list[dict]:
@@ -106,9 +114,106 @@ def _already_ran(time_str: str, now: datetime) -> bool:
     return (_RAN_DIR / f"{now.strftime('%Y-%m-%d')}_{time_str.replace(':', '-')}").exists()
 
 
+def _auto_attempt_path(time_str: str, now: datetime) -> Path:
+    """返回某日某场次的自动尝试计数文件。"""
+    return _RAN_DIR / (
+        f"{now.strftime('%Y-%m-%d')}_{time_str.replace(':', '-')}.attempts"
+    )
+
+
+def _cancelled_path(time_str: str, now: datetime) -> Path:
+    """返回某日某场次的取消标记。"""
+    return _RAN_DIR / (
+        f"{now.strftime('%Y-%m-%d')}_{time_str.replace(':', '-')}.cancelled"
+    )
+
+
+def _push_pending_path(time_str: str, now: datetime) -> Path:
+    """返回某场次“内容已提交、仅待 push”的状态文件。"""
+    return _RAN_DIR / (
+        f"{now.strftime('%Y-%m-%d')}_{time_str.replace(':', '-')}.push-pending"
+    )
+
+
+def _run_ref(time_str: str, now: datetime) -> str:
+    """生成可安全放进命令行的场次引用。"""
+    return f"{now.strftime('%Y-%m-%d')}@{time_str}"
+
+
+def _parse_run_ref(value: str) -> tuple[str, datetime]:
+    """解析通知动作携带的场次引用。"""
+    try:
+        date_str, time_str = value.split("@", 1)
+        run_at = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")
+    except ValueError as e:
+        raise ValueError(f"无效场次引用: {value}") from e
+    return time_str, run_at
+
+
+def _auto_attempt_count(time_str: str, now: datetime) -> int:
+    """读取某场次已启动的自动尝试次数；坏文件按 0 处理。"""
+    path = _auto_attempt_path(time_str, now)
+    try:
+        return max(0, int(path.read_text(encoding="utf-8").strip()))
+    except FileNotFoundError:
+        return 0
+    except (OSError, ValueError) as e:
+        logger.warning("自动尝试计数无效，按 0 处理: %s", e)
+        return 0
+
+
+def _start_auto_attempt(time_str: str, now: datetime) -> int:
+    """在真正执行前持久化本次尝试，避免进程异常退出后无限重启。"""
+    attempt = _auto_attempt_count(time_str, now) + 1
+    _RAN_DIR.mkdir(exist_ok=True)
+    _auto_attempt_path(time_str, now).write_text(str(attempt), encoding="utf-8")
+    return attempt
+
+
+def _clear_auto_attempts(time_str: str, now: datetime) -> None:
+    """成功补跑后清除场次尝试状态。"""
+    _auto_attempt_path(time_str, now).unlink(missing_ok=True)
+
+
+def _is_cancelled(time_str: str, now: datetime) -> bool:
+    return _cancelled_path(time_str, now).exists()
+
+
+def _cancel_run(time_str: str, now: datetime) -> None:
+    """取消当前场次；只影响这一天的这个时间点。"""
+    _RAN_DIR.mkdir(exist_ok=True)
+    _cancelled_path(time_str, now).touch()
+    _clear_auto_attempts(time_str, now)
+    _push_pending_path(time_str, now).unlink(missing_ok=True)
+    logger.info("场次 %s 已由用户取消", _run_ref(time_str, now))
+
+
+def _clear_cancelled(time_str: str, now: datetime) -> None:
+    _cancelled_path(time_str, now).unlink(missing_ok=True)
+
+
+def _report_auto_attempt_failure(time_str: str, attempt: int) -> None:
+    """自动失败仅在首次和最终停止时通知，避免每5分钟刷屏。"""
+    if attempt == 1:
+        _notify(
+            "搞笑视频墙 ⚠️",
+            f"{time_str} 运行失败，将自动重试（1/{_MAX_AUTO_ATTEMPTS}）",
+        )
+    elif attempt >= _MAX_AUTO_ATTEMPTS:
+        _notify(
+            "搞笑视频墙 ❌",
+            f"{time_str} 连续失败 {_MAX_AUTO_ATTEMPTS} 次，已停止自动重试；"
+            "请检查网络或本地代理后重跑",
+            retry=True,
+        )
+
+
 def _mark_ran(time_str: str, now: datetime) -> None:
     _RAN_DIR.mkdir(exist_ok=True)
     (_RAN_DIR / f"{now.strftime('%Y-%m-%d')}_{time_str.replace(':', '-')}").touch()
+    _clear_auto_attempts(time_str, now)
+    _clear_cancelled(time_str, now)
+    _push_pending_path(time_str, now).unlink(missing_ok=True)
     # 清理3天前的标记
     cutoff = (now - timedelta(days=3)).timestamp()
     for f in _RAN_DIR.iterdir():
@@ -144,14 +249,19 @@ def _terminal_notifier_path() -> Path | None:
 
 
 def _retry_command() -> str:
-    """返回通知点击后执行的安全补跑命令，输出追加到原 launchd 日志。"""
-    command = shlex.join([sys.executable, str(Path(__file__).resolve()), "--once"])
+    """返回通知点击命令；有场次上下文时先让用户选择重试或取消。"""
+    args = [sys.executable, str(Path(__file__).resolve())]
+    if _CURRENT_RUN_REF:
+        args.extend(["--choose-run", _CURRENT_RUN_REF])
+    else:
+        args.append("--once")
+    command = shlex.join(args)
     return f"{command} >> {shlex.quote(str(_LOG_PATH))} 2>&1"
 
 
 def _notify(title: str, message: str, *, retry: bool = False) -> None:
-    """发送 macOS 通知；retry=True 时点击通知立即补跑一次。"""
-    display_message = f"{message}（点击重跑）" if retry else message
+    """发送 macOS 通知；retry=True 时点击后可选择重试或取消本场。"""
+    display_message = f"{message}（点击选择重试/取消）" if retry else message
     notifier = _terminal_notifier_path()
     if notifier:
         args = [
@@ -203,6 +313,36 @@ def _notify(title: str, message: str, *, retry: bool = False) -> None:
         logger.warning("通知发送失败: backend=osascript error=%s", e)
 
 
+def _prompt_run_action(time_str: str) -> str | None:
+    """弹出真正带按钮的重试/取消对话框。"""
+    script = (
+        "on run argv\n"
+        "set runTime to item 1 of argv\n"
+        "set answer to display dialog "
+        "(runTime & \" 场次已停止自动重试，请选择后续操作。\") "
+        "with title \"搞笑视频墙\" "
+        "buttons {\"关闭\", \"取消本场\", \"立即重试\"} "
+        "default button \"立即重试\"\n"
+        "return button returned of answer\n"
+        "end run"
+    )
+    try:
+        result = subprocess.run(
+            ["osascript", "-e", script, "--", time_str],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+    except (OSError, subprocess.TimeoutExpired) as e:
+        logger.warning("无法显示重试/取消按钮: %s", e)
+        return None
+    if result.returncode != 0:
+        logger.warning("重试/取消对话框失败: %s", result.stderr.strip())
+        return None
+    action = result.stdout.strip()
+    return action if action in {"立即重试", "取消本场"} else None
+
+
 @contextmanager
 def _run_lock():
     """进程级非阻塞锁，防止通知补跑和 launchd 定时任务并发执行。"""
@@ -221,7 +361,85 @@ def _run_lock():
         lock_file.close()
 
 
-def _preflight_check() -> bool:
+def _read_cdp_targets(session: requests.Session) -> list[dict]:
+    """读取并校验 CDP 页面列表。"""
+    response = session.get(f"{_CDP_PROXY}/targets", timeout=3)
+    response.raise_for_status()
+    targets = response.json()
+    if not isinstance(targets, list):
+        raise ValueError("/targets 返回的不是列表")
+    return targets
+
+
+def _launch_chrome() -> bool:
+    """电脑重启后尝试拉起 Chrome，让 CDP proxy 重新连接。"""
+    try:
+        result = subprocess.run(
+            ["open", "-gj", "-a", "Google Chrome"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.TimeoutExpired) as e:
+        logger.info("自动启动 Chrome 失败: %s", e)
+        return False
+    if result.returncode != 0:
+        logger.info("自动启动 Chrome 失败: %s", result.stderr.strip())
+        return False
+    logger.info("已尝试自动启动 Chrome，等待 CDP proxy 重连")
+    return True
+
+
+def _ensure_cdp_tabs(session: requests.Session) -> list[str]:
+    """自动补建缺失的采集标签页，返回仍未就绪的平台。"""
+    try:
+        targets = _read_cdp_targets(session)
+    except (requests.RequestException, OSError) as first_error:
+        logger.info("CDP proxy 首次探测失败: %s", first_error)
+        if not _launch_chrome():
+            raise
+        targets = []
+        last_error: Exception = first_error
+        for _ in range(5):
+            time.sleep(2)
+            try:
+                targets = _read_cdp_targets(session)
+                break
+            except (requests.RequestException, OSError) as e:
+                last_error = e
+        else:
+            raise last_error
+
+    urls = [str(target.get("url", "")) for target in targets if isinstance(target, dict)]
+    missing = [
+        (label, landing_url)
+        for label, domain, landing_url in _REQUIRED_CDP_TABS
+        if not any(domain in url for url in urls)
+    ]
+    if not missing:
+        return []
+
+    logger.warning("CDP 缺少标签页，开始自动补建: %s", ", ".join(x[0] for x in missing))
+    failed: list[str] = []
+    for label, landing_url in missing:
+        try:
+            response = session.post(
+                f"{_CDP_PROXY}/new",
+                data=landing_url.encode(),
+                timeout=20,
+            )
+            response.raise_for_status()
+            payload = response.json()
+            if not isinstance(payload, dict) or not payload.get("targetId"):
+                raise ValueError("/new 未返回 targetId")
+            logger.info("CDP 已自动打开%s标签页: %s", label, payload["targetId"])
+        except (requests.RequestException, OSError, ValueError) as e:
+            logger.warning("CDP 自动打开%s标签页失败: %s", label, e)
+            failed.append(label)
+    return failed
+
+
+def _preflight_check(*, notify_failure: bool = True) -> bool:
     """运行前环境检查。返回 False 表示关键依赖不满足，应跳过本次运行。"""
     issues: list[str] = []
     warnings: list[str] = []
@@ -254,18 +472,16 @@ def _preflight_check() -> bool:
     elif unreachable:
         warnings.append(f"部分网络端点不可达 ({', '.join(unreachable)})")
 
-    # 2. CDP proxy 要验证服务和返回结构；仅端口可连不代表代理已就绪。
+    # 2. CDP proxy 要验证服务、返回结构和必需标签页；缺页时自动补建。
     cdp_session = retry_session(retries=0)
     cdp_session.trust_env = False
     try:
-        response = cdp_session.get("http://localhost:3456/targets", timeout=3)
-        response.raise_for_status()
-        targets = response.json()
-        if not isinstance(targets, list):
-            raise ValueError("/targets 返回的不是列表")
+        missing_tabs = _ensure_cdp_tabs(cdp_session)
+        if missing_tabs:
+            issues.append(f"CDP 标签页打开失败 ({', '.join(missing_tabs)})")
     except (requests.RequestException, OSError, ValueError) as e:
         logger.info("CDP proxy 探测失败: %s", e)
-        warnings.append("CDP proxy 不可用，搜索采集器将降级")
+        issues.append("CDP proxy 不可用")
     finally:
         cdp_session.close()
 
@@ -281,7 +497,8 @@ def _preflight_check() -> bool:
 
     if issues:
         logger.error("preflight 失败，跳过本次运行: %s", " | ".join(issues))
-        _notify("搞笑视频墙 ❌", f"本次跳过: {' | '.join(issues)}", retry=True)
+        if notify_failure:
+            _notify("搞笑视频墙 ❌", f"本次跳过: {' | '.join(issues)}", retry=True)
         return False
 
     logger.info("preflight 通过（关键网络/CDP/DB 检查完成）")
@@ -321,18 +538,45 @@ def _has_unpushed_wall_commit() -> bool:
     return bool(result.stdout.strip())
 
 
-def _push_current_branch() -> None:
+def _write_push_pending(retry_mode: str) -> None:
+    """把 push 失败绑定到当前场次，避免下一场误走只补推。"""
+    if not _CURRENT_RUN_REF:
+        return
+    try:
+        time_str, run_at = _parse_run_ref(_CURRENT_RUN_REF)
+        _RAN_DIR.mkdir(exist_ok=True)
+        _push_pending_path(time_str, run_at).write_text(
+            retry_mode,
+            encoding="utf-8",
+        )
+    except (OSError, ValueError) as e:
+        logger.warning("记录待补推状态失败: %s", e)
+
+
+def _clear_current_push_pending() -> None:
+    if not _CURRENT_RUN_REF:
+        return
+    try:
+        time_str, run_at = _parse_run_ref(_CURRENT_RUN_REF)
+        _push_pending_path(time_str, run_at).unlink(missing_ok=True)
+    except (OSError, ValueError) as e:
+        logger.warning("清理待补推状态失败: %s", e)
+
+
+def _push_current_branch(*, retry_mode: str = "push-only") -> None:
     """推送当前分支；失败时抛错，让调度窗口内的下一轮继续补推。"""
     push = subprocess.run(["git", "push"], cwd=_ROOT, capture_output=True, text=True)
     if push.returncode != 0:
         message = f"GitHub Pages 推送失败: {push.stderr.strip()}"
         logger.error(message)
+        _write_push_pending(retry_mode)
         _notify("搞笑视频墙 ⚠️", "push 失败，下次运行会重试", retry=True)
         raise RuntimeError(message)
+    _clear_current_push_pending()
     logger.info("GitHub Pages 推送完成")
 
 
-def _push_walls() -> None:
+def _push_walls(*, allow_push_only_retry: bool = True) -> None:
     changed: set[str] = set()
     commands = (
         ["git", "diff", "--name-only"],
@@ -354,7 +598,8 @@ def _push_walls() -> None:
     if not targets:
         if _has_unpushed_wall_commit():
             logger.info("发现上次未推送的视频墙提交，立即补推")
-            _push_current_branch()
+            retry_mode = "push-only" if allow_push_only_retry else "rerun"
+            _push_current_branch(retry_mode=retry_mode)
             return
         logger.info("无视频墙文件变更，跳过推送")
         return
@@ -383,7 +628,8 @@ def _push_walls() -> None:
         _notify("搞笑视频墙 ⚠️", message)
         raise RuntimeError(message)
 
-    _push_current_branch()
+    retry_mode = "push-only" if allow_push_only_retry else "rerun"
+    _push_current_branch(retry_mode=retry_mode)
 
 
 def run_all(skip_collect: bool = False, skip_tag: bool = False) -> None:
@@ -410,7 +656,7 @@ def run_all(skip_collect: bool = False, skip_tag: bool = False) -> None:
 
     logger.info("==== 所有 topic 完成 ====")
     _cleanup_old_videos()
-    _push_walls()
+    _push_walls(allow_push_only_retry=not pipeline_errors)
 
     # 汇总各 topic 的采集统计，组装通知
     total_inserted = sum(r.get("inserted", 0) for r in results)
@@ -445,15 +691,57 @@ def run_all(skip_collect: bool = False, skip_tag: bool = False) -> None:
         raise RuntimeError(f"topic 流水线失败，等待调度补跑: {failed_topics}")
 
 
+def _run_or_resume(
+    *,
+    scheduled_run: tuple[str, datetime] | None = None,
+    skip_collect: bool = False,
+    skip_tag: bool = False,
+) -> None:
+    """上次若只差 push，本轮只补推，避免重复采集和打标。"""
+    if scheduled_run:
+        time_str, run_at = scheduled_run
+        pending_path = _push_pending_path(time_str, run_at)
+        if pending_path.exists():
+            retry_mode = pending_path.read_text(encoding="utf-8").strip()
+            if _has_unpushed_wall_commit():
+                logger.info("发现本场上次仅卡在 push，先补推 GitHub")
+                _push_current_branch(retry_mode=retry_mode)
+            else:
+                logger.info("本场待补推提交已由外部推送")
+                pending_path.unlink(missing_ok=True)
+            if retry_mode == "push-only":
+                return
+            logger.info("上次 push 前另有流水线失败，补推后继续重跑流水线")
+    run_all(skip_collect=skip_collect, skip_tag=skip_tag)
+
+
 def main() -> None:
+    global _CURRENT_RUN_REF
+
     import argparse
     p = argparse.ArgumentParser()
     p.add_argument("--once", action="store_true", help="直接跑一次（跳过时间检查）")
     p.add_argument("--no-collect", action="store_true")
     p.add_argument("--no-tag", action="store_true")
+    p.add_argument("--choose-run", help=argparse.SUPPRESS)
     args = p.parse_args()
 
     _rotate_launchd_log()
+
+    chosen_run: tuple[str, datetime] | None = None
+    if args.choose_run:
+        try:
+            chosen_run = _parse_run_ref(args.choose_run)
+        except ValueError as e:
+            p.error(str(e))
+        action = _prompt_run_action(chosen_run[0])
+        if action == "取消本场":
+            _cancel_run(*chosen_run)
+            _notify("搞笑视频墙 ⏹", f"{chosen_run[0]} 场次已取消")
+            return
+        if action != "立即重试":
+            return
+        args.once = True
 
     if args.once:
         with _run_lock() as acquired:
@@ -461,40 +749,78 @@ def main() -> None:
                 logger.warning("已有调度任务正在运行，忽略重复补跑")
                 _notify("搞笑视频墙 ⏳", "已有任务正在运行，无需重复启动")
                 return
-            started_at = datetime.now()
-            matched = _find_run(_load_schedule(), started_at)
-            if not _preflight_check():
-                sys.exit(1)
-            run_all(skip_collect=args.no_collect, skip_tag=args.no_tag)
-            # 点击通知通常发生在计划时间后的补跑窗口内。成功后写标记，
-            # 避免下一次 5 分钟 launchd 触发再次执行同一计划。
+            started_at = chosen_run[1] if chosen_run else datetime.now()
+            matched = (
+                {"time": chosen_run[0]}
+                if chosen_run
+                else _find_run(_load_schedule(), started_at)
+            )
             if matched is not None:
-                _mark_ran(matched["time"], started_at)
+                _CURRENT_RUN_REF = _run_ref(matched["time"], started_at)
+                _clear_cancelled(matched["time"], started_at)
+            try:
+                if not _preflight_check():
+                    sys.exit(1)
+                _run_or_resume(
+                    scheduled_run=(
+                        (matched["time"], started_at)
+                        if matched is not None
+                        else None
+                    ),
+                    skip_collect=args.no_collect,
+                    skip_tag=args.no_tag,
+                )
+                # 点击通知通常发生在计划时间后的补跑窗口内。成功后写标记，
+                # 避免下一次 5 分钟 launchd 触发再次执行同一计划。
+                if matched is not None:
+                    _mark_ran(matched["time"], started_at)
+            finally:
+                _CURRENT_RUN_REF = None
         return
 
     now = datetime.now()
     matched = _find_run(_load_schedule(), now)
     if matched is None:
         sys.exit(0)
+    _CURRENT_RUN_REF = _run_ref(matched["time"], now)
 
-    with _run_lock() as acquired:
-        if not acquired:
-            logger.info("已有调度任务正在运行，本轮跳过")
-            sys.exit(0)
-        # 获锁后重新检查，避免另一个进程刚完成并写入成功标记。
-        if _already_ran(matched["time"], now):
-            sys.exit(0)
+    try:
+        with _run_lock() as acquired:
+            if not acquired:
+                logger.info("已有调度任务正在运行，本轮跳过")
+                sys.exit(0)
+            # 获锁后重新检查，避免另一个进程刚完成并写入成功标记。
+            if _already_ran(matched["time"], now) or _is_cancelled(
+                matched["time"], now
+            ):
+                return
 
-        if not _is_interactive_session():
-            logger.info("检测到合盖暗唤醒，本轮延后，开盖后自动补跑")
-            return
+            if not _is_interactive_session():
+                logger.info("检测到合盖暗唤醒，本轮延后，开盖后自动补跑")
+                return
 
-        # 时间匹配后才做 preflight，避免每5分钟都检查一遍
-        if not _preflight_check():
-            sys.exit(1)
+            attempts = _auto_attempt_count(matched["time"], now)
+            if attempts >= _MAX_AUTO_ATTEMPTS:
+                return
+            attempt = _start_auto_attempt(matched["time"], now)
+            logger.info(
+                "场次 %s 自动尝试 %d/%d",
+                matched["time"], attempt, _MAX_AUTO_ATTEMPTS,
+            )
 
-        run_all()
-        _mark_ran(matched["time"], now)
+            # 自动场次由外层统一控制通知频率，preflight 不再每5分钟弹一次。
+            if not _preflight_check(notify_failure=False):
+                _report_auto_attempt_failure(matched["time"], attempt)
+                sys.exit(1)
+
+            try:
+                _run_or_resume(scheduled_run=(matched["time"], now))
+            except Exception:
+                _report_auto_attempt_failure(matched["time"], attempt)
+                raise
+            _mark_ran(matched["time"], now)
+    finally:
+        _CURRENT_RUN_REF = None
 
 
 if __name__ == "__main__":

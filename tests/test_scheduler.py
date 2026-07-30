@@ -29,15 +29,27 @@ class _Response:
 
 
 class _Session:
-    def __init__(self, responses: dict):
+    def __init__(self, responses: dict, post_responses: dict | None = None):
         self.responses = responses
         self.calls: list[tuple[str, dict]] = []
+        self.post_responses = post_responses or {}
+        self.post_calls: list[tuple[str, dict]] = []
         self.trust_env = True
         self.closed = False
 
     def get(self, url: str, **kwargs):
         self.calls.append((url, kwargs))
         response = self.responses[url]
+        if isinstance(response, Exception):
+            raise response
+        return response
+
+    def post(self, url: str, **kwargs):
+        self.post_calls.append((url, kwargs))
+        response = self.post_responses.get(
+            url,
+            _Response(payload={"targetId": f"target-{len(self.post_calls)}"}),
+        )
         if isinstance(response, Exception):
             raise response
         return response
@@ -160,8 +172,50 @@ def test_push_walls_propagates_push_failure_for_later_retry(monkeypatch):
     assert calls[-1] == ["git", "push"]
 
 
+def test_push_failure_records_same_run_for_push_only_resume(monkeypatch, tmp_path):
+    run_at = datetime(2026, 7, 30, 8, 0)
+    monkeypatch.setattr(scheduler, "_RAN_DIR", tmp_path / ".ran")
+    monkeypatch.setattr(scheduler, "_CURRENT_RUN_REF", "2026-07-30@08:00")
+    monkeypatch.setattr(
+        scheduler.subprocess,
+        "run",
+        lambda *args, **kwargs: _result(returncode=1, stderr="network down"),
+    )
+    monkeypatch.setattr(scheduler, "_notify", lambda *args, **kwargs: None)
+
+    with pytest.raises(RuntimeError, match="推送失败"):
+        scheduler._push_current_branch()
+
+    assert (
+        scheduler._push_pending_path("08:00", run_at).read_text(encoding="utf-8")
+        == "push-only"
+    )
+
+
+def test_run_or_resume_ignores_unrelated_unpushed_commit(monkeypatch):
+    events: list[str] = []
+    monkeypatch.setattr(scheduler, "_has_unpushed_wall_commit", lambda: True)
+    monkeypatch.setattr(
+        scheduler,
+        "_push_current_branch",
+        lambda **kwargs: events.append("push"),
+    )
+    monkeypatch.setattr(
+        scheduler,
+        "run_all",
+        lambda **kwargs: events.append("run"),
+    )
+
+    scheduler._run_or_resume(
+        scheduled_run=("13:00", datetime(2026, 7, 30, 13, 0)),
+    )
+
+    assert events == ["run"]
+
+
 def test_scheduled_run_marks_only_after_success(monkeypatch, tmp_path):
     marked: list[tuple] = []
+    monkeypatch.setattr(scheduler, "_RAN_DIR", tmp_path / ".ran")
     monkeypatch.setattr(scheduler, "_RUN_LOCK", tmp_path / "scheduler.lock")
     monkeypatch.setattr(sys, "argv", ["scheduler.py"])
     monkeypatch.setattr(scheduler, "_rotate_launchd_log", lambda: None)
@@ -169,10 +223,12 @@ def test_scheduled_run_marks_only_after_success(monkeypatch, tmp_path):
     monkeypatch.setattr(scheduler, "_find_run", lambda runs, now: runs[0])
     monkeypatch.setattr(scheduler, "_already_ran", lambda *args: False)
     monkeypatch.setattr(scheduler, "_is_interactive_session", lambda: True)
-    monkeypatch.setattr(scheduler, "_preflight_check", lambda: True)
+    monkeypatch.setattr(scheduler, "_preflight_check", lambda **kwargs: True)
     monkeypatch.setattr(scheduler, "_mark_ran", lambda *args: marked.append(args))
     monkeypatch.setattr(
-        scheduler, "run_all", lambda: (_ for _ in ()).throw(RuntimeError("boom")),
+        scheduler,
+        "run_all",
+        lambda **kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
     )
 
     with pytest.raises(RuntimeError, match="boom"):
@@ -196,7 +252,7 @@ def test_once_marks_starting_schedule_even_if_run_finishes_after_window(monkeypa
     monkeypatch.setattr(scheduler, "_RUN_LOCK", tmp_path / "scheduler.lock")
     monkeypatch.setattr(scheduler, "datetime", FakeDateTime)
     monkeypatch.setattr(scheduler, "_rotate_launchd_log", lambda: None)
-    monkeypatch.setattr(scheduler, "_preflight_check", lambda: True)
+    monkeypatch.setattr(scheduler, "_preflight_check", lambda **kwargs: True)
     monkeypatch.setattr(scheduler, "run_all", run_all)
     monkeypatch.setattr(scheduler, "_load_schedule", lambda: [{"time": "08:00"}])
     monkeypatch.setattr(scheduler, "_mark_ran", lambda *args: marked.append(args))
@@ -211,7 +267,11 @@ def test_run_all_reports_topic_failure_after_publishing_successful_topic(monkeyp
     monkeypatch.setattr(scheduler, "init_db", lambda _: None)
     monkeypatch.setattr(scheduler, "list_topics", lambda: ["funny", "ai"])
     monkeypatch.setattr(scheduler, "_cleanup_old_videos", lambda: None)
-    monkeypatch.setattr(scheduler, "_push_walls", lambda: published.append(True))
+    monkeypatch.setattr(
+        scheduler,
+        "_push_walls",
+        lambda **kwargs: published.append(True),
+    )
     monkeypatch.setattr(scheduler, "_notify", lambda *args, **kwargs: None)
 
     def run_pipeline(topic, **kwargs):
@@ -290,6 +350,116 @@ def test_scheduled_run_defers_silently_during_darkwake(monkeypatch, tmp_path):
     assert events == []
 
 
+def test_scheduler_limits_auto_attempts_but_manual_retry_can_recover(
+    monkeypatch, tmp_path,
+):
+    now = datetime(2026, 7, 30, 8, 20)
+    ready = {"value": False}
+    events: list[str] = []
+    notifications: list[tuple[str, str, bool]] = []
+
+    class FakeDateTime:
+        @classmethod
+        def now(cls):
+            return now
+
+    def preflight(**kwargs):
+        events.append("preflight")
+        return ready["value"]
+
+    monkeypatch.setattr(sys, "argv", ["scheduler.py"])
+    monkeypatch.setattr(scheduler, "datetime", FakeDateTime)
+    monkeypatch.setattr(scheduler, "_RAN_DIR", tmp_path / ".ran")
+    monkeypatch.setattr(scheduler, "_RUN_LOCK", tmp_path / "scheduler.lock")
+    monkeypatch.setattr(scheduler, "_rotate_launchd_log", lambda: None)
+    monkeypatch.setattr(scheduler, "_load_schedule", lambda: [{"time": "08:00"}])
+    monkeypatch.setattr(scheduler, "_is_interactive_session", lambda: True)
+    monkeypatch.setattr(scheduler, "_preflight_check", preflight)
+    monkeypatch.setattr(scheduler, "run_all", lambda **kwargs: events.append("run"))
+    monkeypatch.setattr(
+        scheduler,
+        "_notify",
+        lambda title, message, *, retry=False: notifications.append(
+            (title, message, retry)
+        ),
+    )
+
+    for _ in range(3):
+        with pytest.raises(SystemExit) as exc_info:
+            scheduler.main()
+        assert exc_info.value.code == 1
+
+    scheduler.main()
+
+    assert events == ["preflight", "preflight", "preflight"]
+    assert [retry for _, _, retry in notifications] == [False, True]
+    assert "停止自动重试" in notifications[-1][1]
+
+    ready["value"] = True
+    monkeypatch.setattr(sys, "argv", ["scheduler.py", "--once"])
+    scheduler.main()
+
+    assert events[-2:] == ["preflight", "run"]
+    assert scheduler._auto_attempt_count("08:00", now) == 0
+    assert scheduler._already_ran("08:00", now) is True
+
+
+def test_cancelled_schedule_skips_preflight_and_pipeline(monkeypatch, tmp_path):
+    now = datetime(2026, 7, 30, 8, 20)
+    events: list[str] = []
+
+    class FakeDateTime:
+        @classmethod
+        def now(cls):
+            return now
+
+    monkeypatch.setattr(sys, "argv", ["scheduler.py"])
+    monkeypatch.setattr(scheduler, "datetime", FakeDateTime)
+    monkeypatch.setattr(scheduler, "_RAN_DIR", tmp_path / ".ran")
+    monkeypatch.setattr(scheduler, "_RUN_LOCK", tmp_path / "scheduler.lock")
+    monkeypatch.setattr(scheduler, "_rotate_launchd_log", lambda: None)
+    monkeypatch.setattr(scheduler, "_load_schedule", lambda: [{"time": "08:00"}])
+    monkeypatch.setattr(
+        scheduler,
+        "_preflight_check",
+        lambda **kwargs: events.append("preflight") or True,
+    )
+    monkeypatch.setattr(
+        scheduler,
+        "_run_or_resume",
+        lambda **kwargs: events.append("run"),
+    )
+    scheduler._cancel_run("08:00", now)
+
+    scheduler.main()
+
+    assert events == []
+
+
+def test_notification_cancel_action_marks_only_that_run(monkeypatch, tmp_path):
+    notifications: list[str] = []
+    run_at = datetime(2026, 7, 30, 8, 0)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["scheduler.py", "--choose-run", "2026-07-30@08:00"],
+    )
+    monkeypatch.setattr(scheduler, "_RAN_DIR", tmp_path / ".ran")
+    monkeypatch.setattr(scheduler, "_rotate_launchd_log", lambda: None)
+    monkeypatch.setattr(scheduler, "_prompt_run_action", lambda _: "取消本场")
+    monkeypatch.setattr(
+        scheduler,
+        "_notify",
+        lambda title, message, **kwargs: notifications.append(message),
+    )
+
+    scheduler.main()
+
+    assert scheduler._is_cancelled("08:00", run_at) is True
+    assert scheduler._is_cancelled("13:00", run_at) is False
+    assert notifications == ["08:00 场次已取消"]
+
+
 def test_preflight_allows_partial_network_failure(monkeypatch, tmp_path):
     monkeypatch.setattr(scheduler, "_DB", tmp_path / "video.db")
     monkeypatch.setattr(
@@ -310,6 +480,30 @@ def test_preflight_allows_partial_network_failure(monkeypatch, tmp_path):
         "https://a.test",
         "https://b.test",
     ]
+    assert len(cdp.post_calls) == 3
+
+
+def test_preflight_opens_only_missing_cdp_tabs(monkeypatch, tmp_path):
+    monkeypatch.setattr(scheduler, "_DB", tmp_path / "video.db")
+    monkeypatch.setattr(
+        scheduler,
+        "_network_endpoints",
+        lambda: [("A", "https://a.test")],
+    )
+    network = _Session({"https://a.test": _Response()})
+    cdp = _Session({
+        "http://localhost:3456/targets": _Response(
+            payload=[{"url": "https://www.bilibili.com/"}],
+        ),
+    })
+    _install_preflight_sessions(monkeypatch, network, cdp)
+
+    assert scheduler._preflight_check() is True
+    opened = {kwargs["data"].decode() for _, kwargs in cdp.post_calls}
+    assert opened == {
+        "https://www.douyin.com/",
+        "https://www.xiaohongshu.com/explore",
+    }
 
 
 def test_preflight_rejects_when_all_network_endpoints_fail(monkeypatch, tmp_path):
@@ -355,7 +549,7 @@ def test_network_failure_notification_is_clickable_retry(monkeypatch, tmp_path):
     assert notifications[-1][2] is True
 
 
-def test_preflight_logs_cdp_degradation_without_notifying(monkeypatch, tmp_path, caplog):
+def test_preflight_rejects_invalid_cdp_payload(monkeypatch, tmp_path, caplog):
     notifications: list[tuple[str, str, bool]] = []
     monkeypatch.setattr(scheduler, "_DB", tmp_path / "video.db")
     monkeypatch.setattr(
@@ -377,10 +571,9 @@ def test_preflight_logs_cdp_degradation_without_notifying(monkeypatch, tmp_path,
     _install_preflight_sessions(monkeypatch, network, cdp)
 
     with caplog.at_level(logging.WARNING):
-        assert scheduler._preflight_check() is True
+        assert scheduler._preflight_check() is False
 
-    assert notifications == []
-    assert "CDP proxy 不可用" in caplog.text
+    assert notifications[-1][2] is True
     assert cdp.trust_env is False
 
 
@@ -403,9 +596,18 @@ def test_retry_notification_executes_scheduler_once(monkeypatch, caplog):
     args = calls[0]
     assert args[0] == "/mock/terminal-notifier"
     assert args[args.index("-execute") + 1] == "retry-command"
-    assert "点击重跑" in args[args.index("-message") + 1]
+    assert "点击选择重试/取消" in args[args.index("-message") + 1]
     assert "backend=terminal-notifier" in caplog.text
     assert "clickable=True" in caplog.text
+
+
+def test_retry_command_opens_action_chooser(monkeypatch):
+    monkeypatch.setattr(scheduler, "_CURRENT_RUN_REF", "2026-07-30@08:00")
+
+    command = scheduler._retry_command()
+
+    assert "--choose-run" in command
+    assert "2026-07-30@08:00" in command
 
 
 def test_retry_notification_logs_nonclickable_fallback(monkeypatch, caplog):
