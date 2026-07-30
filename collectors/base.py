@@ -10,11 +10,17 @@ import threading
 import time
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 import requests
 
-from utils.errors import CDPConnectionError, CollectorError, LoginExpiredError
+from utils.errors import (
+    CDPConnectionError,
+    CollectorError,
+    LoginExpiredError,
+    RateLimitError,
+)
 from utils.log import get_logger
 
 logger = get_logger(__name__)
@@ -26,12 +32,59 @@ logger = get_logger(__name__)
 _collector_registry: dict[str, type["BaseCollector"]] = {}
 _cdp_domain_locks: dict[str, threading.Lock] = {}
 _cdp_domain_locks_guard = threading.Lock()
+_cdp_domain_blocks: dict[str, tuple[type[CollectorError], str]] = {}
+_CDP_STATE_DIR = Path(__file__).parent.parent / ".ran"
 
 
 def _get_cdp_domain_lock(domain: str) -> threading.Lock:
     """返回平台级进程内锁，避免多个 topic 同时导航同一个 CDP 标签页。"""
     with _cdp_domain_locks_guard:
         return _cdp_domain_locks.setdefault(domain, threading.Lock())
+
+
+def _cooldown_path(domain: str) -> Path:
+    safe_domain = domain.replace(".", "_").replace("/", "_")
+    return _CDP_STATE_DIR / f"cdp-{safe_domain}.cooldown"
+
+
+def cdp_cooldown_remaining(domain: str) -> int:
+    """返回平台频控剩余秒数；无有效冷却时返回 0。"""
+    path = _cooldown_path(domain)
+    try:
+        expiry = float(path.read_text(encoding="utf-8").splitlines()[0])
+    except FileNotFoundError:
+        return 0
+    except (OSError, ValueError, IndexError) as e:
+        logger.warning("CDP 冷却状态无效，已忽略 %s: %s", path, e)
+        path.unlink(missing_ok=True)
+        return 0
+    remaining = int(expiry - time.time())
+    if remaining > 0:
+        return remaining
+    path.unlink(missing_ok=True)
+    return 0
+
+
+def set_cdp_domain_cooldown(domain: str, seconds: int, reason: str) -> None:
+    """持久化平台频控冷却，供后续调度进程共同遵守。"""
+    _CDP_STATE_DIR.mkdir(exist_ok=True)
+    expiry = time.time() + max(1, seconds)
+    _cooldown_path(domain).write_text(
+        f"{expiry}\n{reason}\n",
+        encoding="utf-8",
+    )
+    logger.warning(
+        "CDP 平台进入冷却: domain=%s seconds=%d reason=%s",
+        domain,
+        seconds,
+        reason,
+    )
+
+
+def reset_cdp_domain_blocks() -> None:
+    """清理进程内熔断状态，供独立运行或测试复位。"""
+    with _cdp_domain_locks_guard:
+        _cdp_domain_blocks.clear()
 
 
 def register_collector(name: str):
@@ -90,6 +143,7 @@ class CDPCollector(BaseCollector):
     request_delay: float = 1.5
     page_wait: float = 3.0
     content_hash_prefix: str = ""
+    rate_limit_cooldown: int = 0
 
     def __init__(self, cdp_proxy: str = "http://localhost:3456", **kwargs: Any):
         super().__init__(**kwargs)
@@ -103,7 +157,31 @@ class CDPCollector(BaseCollector):
         # 同一平台的 collector 会定位到同一个浏览器 tab；必须覆盖整个
         # 导航→读取循环，否则 funny/ai 并发时会读到对方刚导航出的结果。
         with _get_cdp_domain_lock(self.domain_pattern):
-            return self._collect_locked()
+            blocked = _cdp_domain_blocks.get(self.domain_pattern)
+            if blocked:
+                error_type, message = blocked
+                raise error_type(message)
+
+            remaining = cdp_cooldown_remaining(self.domain_pattern)
+            if remaining:
+                message = (
+                    f"{self.domain_pattern} 仍在频控冷却，"
+                    f"剩余约 {max(1, remaining // 60)} 分钟"
+                )
+                _cdp_domain_blocks[self.domain_pattern] = (RateLimitError, message)
+                raise RateLimitError(message)
+
+            try:
+                return self._collect_locked()
+            except (LoginExpiredError, RateLimitError) as e:
+                _cdp_domain_blocks[self.domain_pattern] = (type(e), str(e))
+                if isinstance(e, RateLimitError) and self.rate_limit_cooldown:
+                    set_cdp_domain_cooldown(
+                        self.domain_pattern,
+                        self.rate_limit_cooldown,
+                        str(e),
+                    )
+                raise
 
     def _collect_locked(self) -> list[dict]:
         """持有平台 CDP 锁后执行完整关键词采集。"""
@@ -131,7 +209,7 @@ class CDPCollector(BaseCollector):
                     if v["content_hash"] not in seen:
                         seen.add(v["content_hash"])
                         results.append(v)
-            except LoginExpiredError:
+            except (LoginExpiredError, RateLimitError):
                 raise
             except CollectorError as e:
                 logger.warning("[%s] %s 失败: %s", self.__class__.__name__, kw, e)

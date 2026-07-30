@@ -9,6 +9,7 @@ from pipeline import dedup
 from collectors.bilibili import BilibiliPopularCollector, fetch_popular
 from collectors.douyin import DouyinCollector
 from collectors.xiaohongshu import XiaohongshuCollector
+from topics.registry import get_topic
 
 _collector = BilibiliPopularCollector(topic="funny")
 
@@ -60,6 +61,16 @@ def test_cdp_collectors_prefix_override():
     xhs = XiaohongshuCollector(topic="funny", content_hash_prefix="xiaohongshu_funny")
     xv = xhs._map_item({"noteId": "abc", "title": "搞笑视频", "likes": "10"}, "搞笑")
     assert xv["content_hash"] == "xiaohongshu_funny:abc"
+
+
+def test_xiaohongshu_keyword_budget_is_two_per_topic():
+    for topic_name in ("funny", "ai"):
+        config = get_topic(topic_name)
+        xhs = next(
+            cdef for cdef in config.collectors
+            if cdef.name == "xiaohongshu_search"
+        )
+        assert len(xhs.kwargs["keywords"]) == 2
 
 
 def test_map_video_skip_ogv():

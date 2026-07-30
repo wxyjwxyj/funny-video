@@ -60,6 +60,7 @@ class _Session:
 
 def _install_preflight_sessions(monkeypatch, network: _Session, cdp: _Session) -> None:
     sessions = iter([network, cdp])
+    monkeypatch.setattr(scheduler, "cdp_cooldown_remaining", lambda _: 0)
     monkeypatch.setattr(
         scheduler,
         "retry_session",
@@ -264,8 +265,14 @@ def test_once_marks_starting_schedule_even_if_run_finishes_after_window(monkeypa
 
 def test_run_all_reports_topic_failure_after_publishing_successful_topic(monkeypatch):
     published: list[bool] = []
+    reset_blocks: list[bool] = []
     monkeypatch.setattr(scheduler, "init_db", lambda _: None)
     monkeypatch.setattr(scheduler, "list_topics", lambda: ["funny", "ai"])
+    monkeypatch.setattr(
+        scheduler,
+        "reset_cdp_domain_blocks",
+        lambda: reset_blocks.append(True),
+    )
     monkeypatch.setattr(scheduler, "_cleanup_old_videos", lambda: None)
     monkeypatch.setattr(
         scheduler,
@@ -291,6 +298,7 @@ def test_run_all_reports_topic_failure_after_publishing_successful_topic(monkeyp
         scheduler.run_all()
 
     assert published == [True]
+    assert reset_blocks == [True]
 
 
 def test_find_run_catches_up_until_next_schedule():
@@ -503,6 +511,35 @@ def test_preflight_opens_only_missing_cdp_tabs(monkeypatch, tmp_path):
     assert opened == {
         "https://www.douyin.com/",
         "https://www.xiaohongshu.com/explore",
+    }
+
+
+def test_preflight_does_not_open_domain_during_rate_limit_cooldown(
+    monkeypatch, tmp_path,
+):
+    monkeypatch.setattr(scheduler, "_DB", tmp_path / "video.db")
+    monkeypatch.setattr(
+        scheduler,
+        "_network_endpoints",
+        lambda: [("A", "https://a.test")],
+    )
+    network = _Session({"https://a.test": _Response()})
+    cdp = _Session({
+        "http://localhost:3456/targets": _Response(payload=[]),
+    })
+    _install_preflight_sessions(monkeypatch, network, cdp)
+    monkeypatch.setattr(
+        scheduler,
+        "cdp_cooldown_remaining",
+        lambda domain: 3600 if domain == "xiaohongshu.com" else 0,
+    )
+
+    assert scheduler._preflight_check() is True
+    opened = {kwargs["data"].decode() for _, kwargs in cdp.post_calls}
+    assert "https://www.xiaohongshu.com/explore" not in opened
+    assert opened == {
+        "https://www.bilibili.com/",
+        "https://www.douyin.com/",
     }
 
 

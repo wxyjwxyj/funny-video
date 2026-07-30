@@ -4,9 +4,10 @@ import urllib.parse
 from datetime import datetime, timedelta, timezone
 
 from collectors.base import (
-    CDPCollector, LoginExpiredError,
+    CDPCollector,
     make_video, register_collector,
 )
+from utils.errors import LoginExpiredError, RateLimitError
 from utils.log import get_logger
 
 logger = get_logger(__name__)
@@ -84,9 +85,10 @@ class XiaohongshuCollector(CDPCollector):
     domain_pattern = "xiaohongshu.com"
     default_keywords = ["搞笑", "沙雕"]
     per_keyword = 10
-    request_delay = 3.5
-    page_wait = 4.0
+    request_delay = 10.0
+    page_wait = 5.0
     content_hash_prefix = "xiaohongshu"
+    rate_limit_cooldown = 12 * 60 * 60
     keywords: list[str] = []
 
     _EXTRACT_JS = (
@@ -108,6 +110,15 @@ class XiaohongshuCollector(CDPCollector):
         "cover:img?img.src:''};"
         "}).filter(function(x){return x.noteId&&x.title;})"
     )
+    _STATE_JS = (
+        "(function(){"
+        "var text=(document.title||'')+' '+"
+        "(document.body?document.body.textContent.slice(0,3000):'');"
+        "return {href:location.href,"
+        "rateLimited:/请求频繁|访问频繁|操作频繁|请求过于频繁|稍后再试|"
+        "too many requests/i.test(text)};"
+        "})()"
+    )
 
     def _search(self, keyword: str) -> list[dict]:
         encoded = urllib.parse.quote(keyword)
@@ -117,8 +128,11 @@ class XiaohongshuCollector(CDPCollector):
         self._navigate(url)
         items = self._eval(self._EXTRACT_JS, timeout=15) or []
         if not items:
-            url_check = self._eval("location.href", timeout=5) or ""
-            if "login" in str(url_check) or "signin" in str(url_check):
+            state = self._eval(self._STATE_JS, timeout=5) or {}
+            if state.get("rateLimited"):
+                raise RateLimitError("小红书触发请求频繁，暂停采集并进入12小时冷却")
+            href = str(state.get("href", ""))
+            if "login" in href or "signin" in href:
                 raise LoginExpiredError("小红书登录态过期，请在浏览器重新登录")
         return items[:self.per_keyword]
 

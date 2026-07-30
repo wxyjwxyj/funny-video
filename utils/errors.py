@@ -43,6 +43,11 @@ class LoginExpiredError(CollectorError):
     exit_code = 11
 
 
+class RateLimitError(CollectorError):
+    """平台触发请求频控，需要停止请求并进入冷却。"""
+    exit_code = 12
+
+
 class FetchTimeoutError(CollectorError):
     """采集请求超时。"""
     exit_code = 12

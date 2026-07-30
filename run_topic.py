@@ -16,7 +16,12 @@ from publishers.generate_wall import generate
 from storage import repository
 from storage.db import init_db
 from topics.registry import get_topic, list_topics
-from utils.errors import AIApiError, CollectorError
+from utils.errors import (
+    AIApiError,
+    CollectorError,
+    LoginExpiredError,
+    RateLimitError,
+)
 from utils.log import get_logger
 
 logger = get_logger(__name__)
@@ -25,6 +30,10 @@ _DB = Path(__file__).parent / "video.db"
 
 def _classify_error(e: Exception) -> str:
     """将采集器异常分类为可读短标签，用于通知消息。"""
+    if isinstance(e, RateLimitError):
+        return "频控冷却"
+    if isinstance(e, LoginExpiredError):
+        return "登录态"
     msg = str(e).lower()
     if any(k in msg for k in ("timeout", "timed out", "time out")):
         return "超时"
@@ -75,6 +84,10 @@ def run_pipeline(topic_name: str, *, tag_batch: int | None = None,
                                 topic_name, cdef.name, len(videos), counts)
                     last_err = None
                     break                      # 成功，不重试
+                except (LoginExpiredError, RateLimitError) as e:
+                    # 登录/验证码/频控需要人工恢复或冷却，立即停止，自动重试只会放大风控。
+                    last_err = e
+                    break
                 except Exception as e:
                     last_err = e
                     if attempt == 0:

@@ -3,10 +3,11 @@ from collections.abc import Iterator
 
 import pytest
 
-from collectors.base import CDPCollector, CollectorError, LoginExpiredError, make_video
+from collectors.base import CDPCollector, CollectorError, make_video
 from collectors.bilibili import BilibiliSearchCollector
 from collectors.douyin import DouyinCollector
 from collectors.xiaohongshu import XiaohongshuCollector
+from utils.errors import LoginExpiredError, RateLimitError
 
 
 class _SequencedCollector(CDPCollector):
@@ -128,9 +129,25 @@ def test_douyin_mapping_enforces_minimum_duration_and_parses_like_threshold():
 
 def test_xiaohongshu_empty_results_detect_login_redirect(monkeypatch):
     collector = XiaohongshuCollector(topic="funny")
-    responses: Iterator[object] = iter([[], "https://www.xiaohongshu.com/login"])
+    responses: Iterator[object] = iter([
+        [],
+        {"href": "https://www.xiaohongshu.com/login", "rateLimited": False},
+    ])
     monkeypatch.setattr(collector, "_navigate", lambda _: None)
     monkeypatch.setattr(collector, "_eval", lambda *args, **kwargs: next(responses))
 
     with pytest.raises(LoginExpiredError, match="登录态过期"):
+        collector._search("搞笑")
+
+
+def test_xiaohongshu_detects_request_frequency_limit(monkeypatch):
+    collector = XiaohongshuCollector(topic="funny")
+    responses: Iterator[object] = iter([
+        [],
+        {"href": "https://www.xiaohongshu.com/explore", "rateLimited": True},
+    ])
+    monkeypatch.setattr(collector, "_navigate", lambda _: None)
+    monkeypatch.setattr(collector, "_eval", lambda *args, **kwargs: next(responses))
+
+    with pytest.raises(RateLimitError, match="请求频繁"):
         collector._search("搞笑")

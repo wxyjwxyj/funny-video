@@ -22,6 +22,7 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from collectors.base import cdp_cooldown_remaining, reset_cdp_domain_blocks
 from run_topic import run_pipeline
 from storage.db import init_db
 from topics.registry import list_topics
@@ -411,11 +412,19 @@ def _ensure_cdp_tabs(session: requests.Session) -> list[str]:
             raise last_error
 
     urls = [str(target.get("url", "")) for target in targets if isinstance(target, dict)]
-    missing = [
-        (label, landing_url)
-        for label, domain, landing_url in _REQUIRED_CDP_TABS
-        if not any(domain in url for url in urls)
-    ]
+    missing: list[tuple[str, str]] = []
+    for label, domain, landing_url in _REQUIRED_CDP_TABS:
+        if any(domain in url for url in urls):
+            continue
+        remaining = cdp_cooldown_remaining(domain)
+        if remaining:
+            logger.warning(
+                "CDP 跳过补建%s标签页：频控冷却剩余约 %d 分钟",
+                label,
+                max(1, remaining // 60),
+            )
+            continue
+        missing.append((label, landing_url))
     if not missing:
         return []
 
@@ -635,6 +644,9 @@ def _push_walls(*, allow_push_only_retry: bool = True) -> None:
 def run_all(skip_collect: bool = False, skip_tag: bool = False) -> None:
     init_db(_DB)
     topics = list_topics()
+    # 登录态等进程内熔断只约束当前一轮，避免常驻调度进程在用户
+    # 重新登录后仍永久跳过；频控冷却由磁盘状态单独跨轮次保留。
+    reset_cdp_domain_blocks()
 
     # topic 链路并行；CDPCollector 内部按平台加锁，避免共享 tab 导航串墙。
     with ThreadPoolExecutor(max_workers=len(topics)) as pool:

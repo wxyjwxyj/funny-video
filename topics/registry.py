@@ -29,7 +29,7 @@ _DOUYIN_FUNNY_KW_POOL = [
     "职场搞笑", "情侣搞笑", "生活幽默", "绷不住",  # 组3：生活类
 ]
 
-# 小红书搞笑关键词池（16词，每天取4个）
+# 小红书搞笑关键词池（16词，每天取2个，降低搜索风控风险）
 # 根据历史高分数据：动物/萌宠>爆笑>职场幽默>脱口秀>整活
 _XHS_FUNNY_KW_POOL = [
     "整活", "沙雕", "搞笑合集", "搞笑日常",        # 组0：原有词
@@ -78,7 +78,7 @@ def _build_topics() -> dict[str, TopicConfig]:
                               "content_hash_prefix": "douyin_funny"},
                              skip_flag="douyin"),
                 CollectorDef("xiaohongshu_search",
-                             {"keywords": _daily_rotate(_XHS_FUNNY_KW_POOL),
+                             {"keywords": _daily_rotate(_XHS_FUNNY_KW_POOL, size=2),
                               "content_hash_prefix": "xiaohongshu_funny"},
                              skip_flag="xhs"),
             ],
@@ -99,7 +99,7 @@ def _build_topics() -> dict[str, TopicConfig]:
                               "content_hash_prefix": "douyin_ai"},
                              skip_flag="douyin"),
                 CollectorDef("xiaohongshu_search",
-                             {"keywords": _XHS_AI_KW,
+                             {"keywords": _daily_rotate(_XHS_AI_KW, size=2),
                               "content_hash_prefix": "xiaohongshu_ai"},
                              skip_flag="xhs"),
             ],

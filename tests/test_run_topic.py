@@ -5,7 +5,7 @@ import pytest
 
 import run_topic
 from topics.config import CollectorDef, TopicConfig
-from utils.errors import AIApiError
+from utils.errors import AIApiError, LoginExpiredError
 
 
 def _config(collectors: list[CollectorDef] | None = None) -> TopicConfig:
@@ -37,6 +37,37 @@ def test_zero_collector_result_retries_and_reports_failure(monkeypatch, tmp_path
 
     assert calls == 2
     assert result["failed"] == [("empty", "CollectorError")]
+
+
+def test_login_expiry_does_not_retry_collector(monkeypatch, tmp_path):
+    calls = 0
+
+    class LoginExpiredCollector:
+        def collect(self):
+            nonlocal calls
+            calls += 1
+            raise LoginExpiredError("登录态过期")
+
+    monkeypatch.setattr(
+        run_topic,
+        "get_topic",
+        lambda name: _config([CollectorDef("auth", optional=True)]),
+    )
+    monkeypatch.setattr(
+        run_topic,
+        "create_collector",
+        lambda *args, **kwargs: LoginExpiredCollector(),
+    )
+    monkeypatch.setattr(
+        run_topic,
+        "generate",
+        lambda **kwargs: Path(tmp_path / "wall.html"),
+    )
+
+    result = run_topic.run_pipeline("funny", skip_tag=True)
+
+    assert calls == 1
+    assert result["failed"] == [("auth", "登录态")]
 
 
 def test_total_tagging_failure_preserves_previous_wall(monkeypatch):

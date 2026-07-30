@@ -5,7 +5,9 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
+import collectors.base as collector_base
 from collectors.base import CDPCollector, CollectorError, make_video
+from utils.errors import RateLimitError
 
 
 class _LockedCollector(CDPCollector):
@@ -46,6 +48,16 @@ class _EmptyCollector(_LockedCollector):
         return []
 
 
+class _RateLimitedCollector(_LockedCollector):
+    domain_pattern = "rate-limit.example.com"
+    rate_limit_cooldown = 60
+    search_calls = 0
+
+    def _search(self, keyword: str) -> list[dict]:
+        type(self).search_calls += 1
+        raise RateLimitError("请求频繁")
+
+
 def test_same_domain_collectors_are_serialized():
     _LockedCollector.active = 0
     _LockedCollector.max_active = 0
@@ -59,3 +71,21 @@ def test_same_domain_collectors_are_serialized():
 def test_empty_cdp_result_is_failure():
     with pytest.raises(CollectorError, match="均未采集到结果"):
         _EmptyCollector(topic="funny").collect()
+
+
+def test_rate_limit_trips_domain_circuit_and_persists_cooldown(
+    monkeypatch, tmp_path,
+):
+    monkeypatch.setattr(collector_base, "_CDP_STATE_DIR", tmp_path / ".ran")
+    collector_base.reset_cdp_domain_blocks()
+    _RateLimitedCollector.search_calls = 0
+
+    with pytest.raises(RateLimitError, match="请求频繁"):
+        _RateLimitedCollector(topic="ai").collect()
+    with pytest.raises(RateLimitError):
+        _RateLimitedCollector(topic="funny").collect()
+
+    assert _RateLimitedCollector.search_calls == 1
+    assert collector_base.cdp_cooldown_remaining(
+        _RateLimitedCollector.domain_pattern
+    ) > 0
